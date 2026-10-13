@@ -681,16 +681,21 @@ export function createScene(host, options) {
     options.onBeat?.(name, timeline);
   });
   function render(now) {
-    const dt = Math.min((now - previous) / 1000, 0.05);
+    const raw = (now - previous) / 1000;
+    const dt = Math.min(raw, 0.05);
     previous = now;
     if (document.hidden) return;
     elapsed += dt;
     const t = reduced ? 0 : elapsed;
-    journey.update(dt);
+    // Journeys keep wall-clock time even when a phone renders slowly; physics stays capped.
+    journey.update(Math.min(raw, 0.25));
     const rest = restValues();
     for (const key in rest) {
       if (journey.has(key)) V[key] = journey.value(key);
-      else V[key] = reduced ? rest[key] : THREE.MathUtils.damp(V[key], rest[key], 4, dt);
+      else {
+        V[key] = reduced ? rest[key] : THREE.MathUtils.damp(V[key], rest[key], 4, dt);
+        if (Math.abs(V[key] - rest[key]) < 1e-4) V[key] = rest[key];
+      }
     }
     open = THREE.MathUtils.damp(open, currentStep === 1 ? 1 : 0, 5, dt);
     cakeMix = THREE.MathUtils.damp(cakeMix, currentStep === 2 ? 1 : 0, 5, dt);

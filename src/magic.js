@@ -298,7 +298,7 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
       .addScaledVector(dir, (z - camera.position.z) / dir.z);
   }
   function resize() {
-    heartTarget.copy(project(0.5, view.height < 520 ? 0.41 : 0.37, 1));
+    heartTarget.copy(project(0.5, view.height < 520 ? 0.44 : 0.37, 1));
     heart.position.copy(heartTarget);
   }
   const point = new THREE.Vector3(),

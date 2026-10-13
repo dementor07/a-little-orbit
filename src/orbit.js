@@ -182,6 +182,8 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
   thread.frustumCulled = false;
   scene.add(thread);
 
+  // The pull only works at the system's resting size (not mid-zoom).
+  const atRest = () => Math.abs(zoom - 1) < 0.01 && Math.abs(lift) < 0.01;
   function orbitPoint(target) {
     return local(angle, target).add(centre);
   }
@@ -247,7 +249,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       group.position.copy(centre);
     },
     beginPull() {
-      if (!active || mix < 0.9 || zoom !== 1) return false;
+      if (!active || mix < 0.9 || !atRest()) return false;
       mode = "pull";
       maxStretch = 0;
       sulkClock = 0;
@@ -277,7 +279,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     },
     // A tap (or a keyboard press) sends the moon drifting off on its own, and back.
     drift() {
-      if (!active || mode !== "orbit" || mix < 0.9 || zoom !== 1) return false;
+      if (!active || mode !== "orbit" || mix < 0.9 || !atRest()) return false;
       options.onPullStart?.(true);
       orbitPoint(scratch);
       velocity.copy(scratch.sub(centre).setY(0).normalize().multiplyScalar(6.2));
@@ -353,7 +355,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
         mode === "orbit" ? 3 : 10,
         dt,
       );
-      thread.visible = threadAlpha > 0.01 && zoom === 1;
+      thread.visible = threadAlpha > 0.01 && atRest();
       thread.material.opacity = threadAlpha * 0.9 * mix;
       if (thread.visible) {
         const from = scratch.copy(position).sub(centre).normalize().multiplyScalar(earthRadius).add(centre);

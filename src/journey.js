@@ -32,7 +32,7 @@ export const timelines = {
       T("dotsAnchor", 0, 0, 0, 0.1, "linear"),
       T("dotsAnchor", 0, 1, 4.6, 5.8),
       T("usTag", 0, 1, 2.4, 2.7),
-      T("usTag", 1, 0, 8.2, 8.6),
+      T("usTag", 1, 0, 5.7, 6.2),
       T("band", 0.45, 0.65, 0.2, 2.1),
       T("band", 0.65, 0, 3.3, 4.7),
       T("sun", 1, 0, 2.6, 4.4),
