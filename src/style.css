@@ -1381,3 +1381,127 @@ textarea {
 .experience:not([data-phase="envelope"]):not([data-phase="letter"]) .orbit {
   opacity: 0;
 }
+
+/* Each scale has its own sky behind the canvas: home dusk, the black of space, the violet
+   dark around a galaxy, and the deep void of the universe. */
+:root {
+  --sky-home: radial-gradient(120% 90% at 50% 40%, #22384b 0%, #182c3d 70%);
+  --sky-space: radial-gradient(120% 90% at 40% 45%, #102033 0%, #0a1520 75%);
+  --sky-galaxy: radial-gradient(120% 90% at 50% 50%, #161c36 0%, #0b1220 75%);
+  --sky-universe: radial-gradient(120% 90% at 50% 45%, #0d1824 0%, #060c14 78%);
+}
+.sky {
+  background: var(--sky-home);
+  transition:
+    background-color 1.2s ease,
+    opacity 1.2s ease;
+}
+.sky::before,
+.sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.sky::before {
+  background: var(--sky-space);
+}
+.sky::after {
+  background: var(--sky-galaxy);
+}
+:root[data-scale="space"] .sky::before,
+:root[data-scale="galaxy"] .sky::after,
+:root[data-scale="universe"] .sky::before {
+  opacity: 1;
+}
+:root[data-scale="universe"] .sky::before {
+  background: var(--sky-universe);
+}
+/* The little CSS stars belong to the sky at home only. */
+.sky span {
+  transition: opacity 1.2s ease;
+}
+:root:not([data-scale="home"]) .sky span {
+  opacity: 0 !important;
+}
+:root[data-theme="day"] .sky {
+  background: none;
+}
+:root[data-theme="day"] .sky::before,
+:root[data-theme="day"] .sky::after {
+  display: none;
+}
+
+/* Captions wait while the camera travels. */
+.experience[data-travel] .orbit-caption,
+.experience[data-travel] .game-caption,
+.experience[data-travel] .wish-caption {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.orbit-caption,
+.game-caption,
+.wish-caption {
+  transition: opacity 0.5s ease;
+}
+
+/* The finale is staged: away (nothing), the universe's line, then the homecoming. */
+.finale[data-stage="away"] > *,
+.finale[data-stage="line"] > h2,
+.finale[data-stage="line"] > span {
+  visibility: hidden;
+  animation: none !important;
+}
+
+/* "us": a tiny italic label beside the two dots, and their tap target in the galaxy. */
+.us-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 50%;
+}
+.us-tag span {
+  position: absolute;
+  left: 30px;
+  top: -2px;
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-size: 17px;
+  color: var(--accent);
+  opacity: var(--tag, 0);
+  white-space: nowrap;
+}
+.us-tag.live {
+  pointer-events: auto;
+}
+:root:not(.has-webgl) .us-tag {
+  display: none;
+}
+
+/* A breath of cosmic latte, the average colour of every galaxy, as the universe comes home. */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: #fff8e7;
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+.kiss-whisper.coda {
+  white-space: pre-line;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.experience[data-travel] .star-score {
+  opacity: 0;
+}
+.star-score {
+  transition: opacity 0.5s ease;
+}

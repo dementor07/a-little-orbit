@@ -18,14 +18,24 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     stretch = 0,
     maxStretch = 0,
     hug = 0,
-    threadAlpha = 0;
+    threadAlpha = 0,
+    join = 0,
+    zoom = 1,
+    lift = 0,
+    sulkClock = 0,
+    sulking = false,
+    sulked = false,
+    turn = 0;
   const centre = new THREE.Vector3(),
     pointer = new THREE.Vector3(),
     position = new THREE.Vector3(),
     velocity = new THREE.Vector3(),
     home = new THREE.Vector3(),
     scratch = new THREE.Vector3(),
-    homePosition = new THREE.Vector3();
+    homePosition = new THREE.Vector3(),
+    shown = new THREE.Vector3(),
+    lifted = new THREE.Vector3(),
+    sunView = new THREE.Vector3(-0.5, 0.7, 0.5);
   const group = new THREE.Group();
   group.visible = false;
   scene.add(group);
@@ -84,21 +94,35 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(earthRadius * 1.17, 48, 32),
     new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color("#a8cbe2") }, uOpacity: { value: 1 } },
+      uniforms: {
+        uColor: { value: new THREE.Color("#a8cbe2") },
+        uRose: { value: new THREE.Color("#e9a48e") },
+        uSun: { value: sunView },
+        uOpacity: { value: 1 },
+      },
       vertexShader: /* glsl */ `
         varying float vFacing;
+        varying vec3 vNormal;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vFacing = dot(normalize(normalMatrix * normal), normalize(-mv.xyz));
+          vNormal = normalize(normalMatrix * normal);
+          vFacing = dot(vNormal, normalize(-mv.xyz));
           gl_Position = projectionMatrix * mv;
         }`,
+      // Blue on the day side, rose where day turns to night, fading on the night side.
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform vec3 uRose;
+        uniform vec3 uSun;
         uniform float uOpacity;
         varying float vFacing;
+        varying vec3 vNormal;
         void main() {
           float glow = pow(smoothstep(0.0, 0.52, -vFacing), 1.6);
-          gl_FragColor = vec4(uColor, glow * 0.55 * uOpacity);
+          float lit = dot(normalize(vNormal), normalize(uSun));
+          vec3 colour = mix(uRose, uColor, smoothstep(-0.15, 0.35, lit));
+          glow *= 0.3 + 0.7 * smoothstep(-0.45, 0.1, lit);
+          gl_FragColor = vec4(colour, glow * 0.6 * uOpacity);
           #include <colorspace_fragment>
         }`,
       side: THREE.BackSide,
@@ -164,13 +188,15 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
   function reunite() {
     mode = "orbit";
     velocity.set(0, 0, 0);
+    sulking = false;
     if (maxStretch < 0.45) return;
     hug = 1;
     scratch.copy(position).lerp(centre, 0.5);
     scratch.y += 0.25;
     heartPop(scratch);
     emit(scratch, 14, "rose");
-    options.onReunion?.();
+    options.onReunion?.(sulked);
+    sulked = false;
   }
   return {
     touch,
@@ -180,12 +206,31 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     get ready() {
       return mode === "orbit" && mix > 0.9;
     },
-    setActive(value) {
+    // instant: the journey drives the entrance (zoom), so skip the scale-in.
+    setActive(value, instant = false) {
       active = value;
+      if (instant) mix = value ? 1 : 0;
       if (!value) {
         mode = "orbit";
         stretch = maxStretch = 0;
+        sulking = sulked = false;
+        sulkClock = 0;
       }
+    },
+    // Scale the whole little system about the Earth, and lift it (world units).
+    setZoom(scale, offsetY = 0) {
+      zoom = scale;
+      lift = offsetY;
+    },
+    setSun(direction) {
+      sunView.copy(direction);
+    },
+    get centre() {
+      return lifted;
+    },
+    // From far enough away, the two dots stand in for the Moon.
+    get hidesMoon() {
+      return join > 0.5 && zoom < 0.1;
     },
     setTheme(theme) {
       ringMaterial.color.set(theme === "day" ? "#526a70" : "#ead38e");
@@ -202,9 +247,10 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       group.position.copy(centre);
     },
     beginPull() {
-      if (!active || mix < 0.9) return false;
+      if (!active || mix < 0.9 || zoom !== 1) return false;
       mode = "pull";
       maxStretch = 0;
+      sulkClock = 0;
       orbitPoint(home);
       options.onPullStart?.();
       return true;
@@ -231,7 +277,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     },
     // A tap (or a keyboard press) sends the moon drifting off on its own, and back.
     drift() {
-      if (!active || mode !== "orbit" || mix < 0.9) return false;
+      if (!active || mode !== "orbit" || mix < 0.9 || zoom !== 1) return false;
       options.onPullStart?.(true);
       orbitPoint(scratch);
       velocity.copy(scratch.sub(centre).setY(0).normalize().multiplyScalar(6.2));
@@ -244,8 +290,10 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       mix = reduced
         ? Number(active)
         : THREE.MathUtils.damp(mix, active ? 1 : 0, active ? 3.2 : 4.5, dt);
-      group.visible = mix > 0.01;
-      if (!group.visible && !active) {
+      join = reduced ? Number(active) : THREE.MathUtils.damp(join, active ? 1 : 0, active ? 2.6 : 4.5, dt);
+      // Far enough away, the planets become two dots ("us") and the meshes rest.
+      group.visible = mix > 0.01 && zoom > 0.1;
+      if (!group.visible && !active && join < 0.01) {
         thread.visible = false;
         return;
       }
@@ -260,15 +308,27 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
         position.copy(home);
         reunite();
       } else {
-        springStep(position, velocity, home, dt, 22, 3);
+        springStep(position, velocity, home, dt);
         if (position.distanceTo(home) < 0.035 && velocity.length() < 0.3) reunite();
       }
+      // Held far away for a while, the Moon sulks and turns its back. Let go, and it comes home.
+      if (mode === "pull" && stretch > pullLimit * 0.75) {
+        sulkClock += dt;
+        if (sulkClock > 1.2 && !sulking) {
+          sulking = sulked = true;
+          options.onSulk?.();
+        }
+      } else if (mode === "pull") sulkClock = Math.max(0, sulkClock - dt * 2);
+      turn = THREE.MathUtils.damp(turn, sulking ? 1 : 0, 4, dt);
       stretch = position.distanceTo(home);
       maxStretch = Math.max(maxStretch, stretch);
       hug = THREE.MathUtils.damp(hug, 0, 3.5, dt);
 
       const eased = 1 - Math.pow(1 - mix, 3);
-      group.scale.setScalar(Math.max(0.001, eased * (1 + Math.sin(hug * Math.PI) * 0.07)));
+      lifted.copy(centre);
+      lifted.y += lift;
+      group.position.copy(lifted);
+      group.scale.setScalar(Math.max(0.001, eased * zoom * (1 + Math.sin(hug * Math.PI) * 0.07)));
       earth.rotation.y += dt * (reduced ? 0 : 0.12);
       clouds.rotation.y += dt * (reduced ? 0 : 0.15);
       // Earth leans a touch towards the moon while they are apart.
@@ -276,13 +336,16 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       const lean = Math.min(0.14, stretch * 0.06);
       axis.position.copy(scratch.normalize().multiplyScalar(lean));
 
-      // The card's moon leaves its corner to join the orbit, always facing the Earth.
+      // The card's moon leaves its corner to join the orbit, always facing the Earth
+      // (unless it is sulking).
+      const flight = 1 - Math.pow(1 - join, 3);
+      shown.copy(position).sub(centre).multiplyScalar(zoom).add(lifted);
       homePosition.copy(moon.position);
       const homeRotation = moon.rotation.y;
-      moon.position.lerpVectors(homePosition, position, eased);
-      moon.scale.multiplyScalar(1 + (moonScale - 1) * eased);
-      const facing = Math.atan2(-(centre.z - position.z), centre.x - position.x);
-      moon.rotation.y = lerpAngle(homeRotation, facing, eased);
+      moon.position.lerpVectors(homePosition, shown, flight);
+      moon.scale.multiplyScalar(1 + (moonScale * zoom - 1) * flight);
+      const facing = Math.atan2(-(centre.z - position.z), centre.x - position.x) + turn * Math.PI;
+      moon.rotation.y = lerpAngle(homeRotation, facing, flight);
 
       threadAlpha = THREE.MathUtils.damp(
         threadAlpha,
@@ -290,7 +353,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
         mode === "orbit" ? 3 : 10,
         dt,
       );
-      thread.visible = threadAlpha > 0.01;
+      thread.visible = threadAlpha > 0.01 && zoom === 1;
       thread.material.opacity = threadAlpha * 0.9 * mix;
       if (thread.visible) {
         const from = scratch.copy(position).sub(centre).normalize().multiplyScalar(earthRadius).add(centre);

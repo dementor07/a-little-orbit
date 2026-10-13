@@ -1,7 +1,8 @@
 // Small, DOM-free motion helpers shared by the orbit moment and its tests.
 
-// One semi-implicit spring step. Underdamped on purpose: the moon swings past home once before settling.
-export function springStep(position, velocity, target, dt, stiffness = 22, damping = 3) {
+// One semi-implicit spring step. Underdamped on purpose: the moon swings past home once
+// (about 13%) before settling, the card's "always comes back" signature.
+export function springStep(position, velocity, target, dt, stiffness = 27.4, damping = 5.76) {
   const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
   const h = dt / steps;
   for (let s = 0; s < steps; s++) {

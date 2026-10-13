@@ -9,7 +9,9 @@ export function createAudio() {
     visible = !document.hidden,
     disposed = false,
     revision = 0,
-    note = 0;
+    note = 0,
+    hushed = false,
+    noiseBuffer;
   const sequence = [261.63, 329.63, 392, 523.25, 440, 392, 329.63, 293.66];
   const starNotes = [523.25, 587.33, 659.25, 783.99, 880];
   const voices = new Map();
@@ -106,7 +108,7 @@ export function createAudio() {
     oscillator.stop(now + duration + 0.1);
   }
   function schedule() {
-    if (!canPlay() || document.hidden) return;
+    if (!canPlay() || document.hidden || hushed) return;
     play(sequence[note++ % sequence.length]);
     if (note % 4 === 0) play(130.81, 0, 0.045);
   }
@@ -219,6 +221,51 @@ export function createAudio() {
       source.start(now);
       source.stop(now + 0.19);
     },
+    // The music box holds its breath for the widest view, then plays on.
+    hush(value) {
+      hushed = Boolean(value);
+    },
+    // Air moving past: a filtered noise sweep, up for leaving and down for coming home.
+    whoosh(direction = 1) {
+      if (!canPlay()) return;
+      if (!noiseBuffer) {
+        const length = Math.ceil(context.sampleRate * 1.1);
+        noiseBuffer = context.createBuffer(1, length, context.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        let seed = 17;
+        for (let i = 0; i < length; i++) {
+          seed = (seed * 16807) % 2147483647;
+          data[i] = (seed / 2147483647) * 2 - 1;
+        }
+      }
+      const source = context.createBufferSource(),
+        filter = context.createBiquadFilter(),
+        gain = context.createGain(),
+        now = context.currentTime;
+      source.buffer = noiseBuffer;
+      filter.type = "bandpass";
+      filter.Q.value = 0.9;
+      filter.frequency.setValueAtTime(direction > 0 ? 450 : 1500, now);
+      filter.frequency.exponentialRampToValueAtTime(direction > 0 ? 1500 : 420, now + 0.9);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.022, now + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(bus);
+      track(source, [source, filter, gain]);
+      source.start(now);
+      source.stop(now + 1.1);
+    },
+    // A soft lub-dub when the Earth and Moon become two little dots.
+    heartbeat() {
+      play(98, 0, 0.09, 0.35);
+      play(130.81, 0.22, 0.07, 0.42);
+    },
+    breath() {
+      play(392, 0, 0.02, 0.6);
+      play(261.63, 0.12, 0.018, 0.9);
+    },
     // A small rising sigh as they drift apart, and a resolving chime when they meet again.
     drift() {
       play(329.63, 0, 0.032, 1.1);
@@ -243,6 +290,7 @@ export function createAudio() {
       bus?.disconnect();
       effectNodes.forEach((node) => node.disconnect());
       paperBuffer = undefined;
+      noiseBuffer = undefined;
       context?.close().catch(() => {});
     },
   };

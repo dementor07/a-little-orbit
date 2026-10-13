@@ -279,7 +279,10 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
   }
   let skyClock = 3,
     fireworkClock = 0.8,
-    fireworks = 0;
+    fireworks = 0,
+    fireworksOn = false,
+    homeSky = true,
+    charmLevel = null;
   function shoot(origin) {
     const shot = shooting[shotCursor++ % 3];
     shot.age = 0;
@@ -348,18 +351,34 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
     emit,
     heartPop,
     resize,
+    get heartTarget() {
+      return heartTarget;
+    },
     setFinale(value) {
       finale = value;
       heart.visible = value;
+      fireworksOn = false;
       if (value) {
         smokeAge = 0;
         fireworkClock = 1.2;
       }
       if (!value) {
         finaleMix = 0;
+        charmLevel = null;
         kissAge = 10;
         clearMarks();
       }
+    },
+    // The journey decides when the charm appears (it condenses out of the universe).
+    setCharm(value) {
+      charmLevel = value;
+    },
+    startFireworks() {
+      fireworksOn = true;
+    },
+    // Shooting stars belong to a sky seen through air.
+    setHomeSky(value) {
+      homeSky = value;
     },
     sendKiss,
     shoot,
@@ -383,12 +402,12 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
       if (!reduced) {
         // Now and then a shooting star crosses the sky, in every scene.
         skyClock -= dt;
-        if (skyClock <= 0) {
+        if (skyClock <= 0 && homeSky) {
           skyClock = 4.5 + Math.random() * 5;
           shoot(project(0.55 + Math.random() * 0.5, -0.05 + Math.random() * 0.3, -2.5));
         }
         // In the finale, soft fireworks bloom around the greeting.
-        if (finale && finaleMix > 0.9) {
+        if (finale && fireworksOn && finaleMix > 0.9) {
           fireworkClock -= dt;
           if (fireworkClock <= 0) {
             fireworkClock = 1.5 + Math.random() * 1.3;
@@ -400,11 +419,13 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
           }
         }
       }
-      finaleMix = reduced
-        ? finale
-          ? 1
-          : 0
-        : THREE.MathUtils.damp(finaleMix, finale ? 1 : 0, 5, dt);
+      finaleMix =
+        charmLevel !== null
+          ? charmLevel * Number(finale)
+          : reduced
+            ? Number(finale)
+            : THREE.MathUtils.damp(finaleMix, finale ? 1 : 0, 5, dt);
+      heart.visible = finale && finaleMix > 0.005;
       const beat = reduced
         ? 0
         : Math.exp(-Math.pow((kissAge - 0.12) / 0.09, 2)) * 0.12 +
@@ -412,7 +433,8 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
       heart.scale.setScalar(Math.max(0.001, 0.66 * finaleMix * (1 + beat)));
       // The wish rises out of the candle and becomes the heart.
       flame.getWorldPosition(wick);
-      heart.position.lerpVectors(wick, heartTarget, 1 - Math.pow(1 - finaleMix, 3));
+      if (charmLevel !== null) heart.position.copy(heartTarget);
+      else heart.position.lerpVectors(wick, heartTarget, 1 - Math.pow(1 - finaleMix, 3));
       smokeAge += dt;
       smokeClock += dt;
       if (finale && smokeAge < 2.4 && smokeClock > 0.07 && !reduced) {

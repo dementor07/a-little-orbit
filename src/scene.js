@@ -2,8 +2,11 @@ import * as THREE from "three";
 import { attachInteractions } from "./interactions.js";
 import { createMagic } from "./magic.js";
 import { createOrbit } from "./orbit.js";
-import { createCosmos } from "./galaxy.js";
-import { createBackdrop } from "./backdrop.js";
+import { createGalaxyLayer } from "./galaxy.js";
+import { createSkies } from "./skies.js";
+import { createUniverse } from "./universe.js";
+import { createUs } from "./us.js";
+import { createJourney } from "./journey.js";
 import { decorateCake } from "./cake.js";
 
 export function createScene(host, options) {
@@ -24,8 +27,10 @@ export function createScene(host, options) {
     celebration = -1,
     alive = true,
     wishProgress = 0,
-    moonShow = 1,
-    finaleDrop = 0;
+    finaleDrop = 0,
+    cakeBaseX = 0.1,
+    confettiAge = -1,
+    scaleName = "home";
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
   camera.position.set(0, 0.3, 10.7);
@@ -60,6 +65,11 @@ export function createScene(host, options) {
   scene.add(key);
   const fill = new THREE.DirectionalLight(0xa9c8ec, 0.9);
   fill.position.set(5, 1, 3);
+  const keyHome = new THREE.Color(0xfff0ce),
+    keySpace = new THREE.Color(0xfff1e4),
+    keyHomePosition = new THREE.Vector3(-3, 6, 8),
+    keySpacePosition = new THREE.Vector3(-4.5, 6.5, 3);
+  let dayTheme = false;
   scene.add(fill);
 
   function paperTexture(colour, drawing) {
@@ -527,7 +537,12 @@ export function createScene(host, options) {
       p.quaternion.setFromAxisAngle(d.axis, Math.random() * 6);
     });
   };
-  const backdrop = createBackdrop(scene, renderer.getPixelRatio());
+  const pixelRatio = renderer.getPixelRatio();
+  const skies = createSkies(scene, pixelRatio);
+  const galaxy = createGalaxyLayer(scene, pixelRatio);
+  const universe = createUniverse(scene, pixelRatio);
+  const us = createUs(scene, pixelRatio);
+  const journey = createJourney({ reduced });
   const magic = createMagic({ scene, renderer, camera, view, moon: lunarMoon, flame });
   const orbit = createOrbit({
     scene,
@@ -538,7 +553,6 @@ export function createScene(host, options) {
     heartPop: magic.heartPop,
     options,
   });
-  const cosmos = createCosmos(scene, renderer.getPixelRatio());
   const interactions = attachInteractions({
     host,
     renderer,
@@ -583,13 +597,17 @@ export function createScene(host, options) {
     interactions.resize();
     magic.resize();
     orbit.resize(interactions.project);
-    const far = (x, y) => interactions.project(x, y, -7);
-    cosmos.place(
-      interactions.project(0.5, 0.53, -2.2),
-      far(0, 0.5).distanceTo(far(1, 0.5)) / 2,
-      far(0.5, 0).distanceTo(far(0.5, 1)) / 2,
+    skies.layout(interactions.project, camera, interactions.project(0.5, 0.56, 0));
+    galaxy.place(interactions.project(0.5, 0.53, -2.2));
+    const p = interactions.project;
+    universe.build(
+      magic.heartTarget,
+      p(0.06, 0.5, -1).distanceTo(p(0.94, 0.5, -1)) / 2,
+      p(0.5, 0.02, -1).distanceTo(p(0.5, 0.98, -1)) / 2,
     );
+    risePoint.copy(p(0.5, 0.4, 1));
   };
+  const risePoint = new THREE.Vector3();
   const observer = new ResizeObserver(resize);
   observer.observe(host);
   observer.observe(host.parentElement);
@@ -602,12 +620,78 @@ export function createScene(host, options) {
   const stageX = (v) => ((v.x + 1) / 2) * view.W - view.worldLeft,
     stageY = (v) => ((1 - v.y) / 2) * view.H - view.worldTop;
   const projectedKiss = new THREE.Vector3();
+  const projectedUs = new THREE.Vector3();
+
+  // Where every layer rests for each step; a playing journey overrides these exactly, and
+  // when it ends values ease back to rest (they are designed to meet).
+  const V = {};
+  function restValues() {
+    const s = currentStep,
+      home = s === 0 || s === 1 || s === 2;
+    return {
+      home: home ? 1 : 0,
+      space: s === 4 ? 1 : 0,
+      band: s === 4 ? 0.45 : 0,
+      sun: s === 4 ? 1 : 0,
+      lights: s === 4 ? 1 : 0,
+      solarZoom: s === 4 ? 1 : 0.06,
+      solarLift: 0,
+      galaxy: s === 3 ? 1 : 0,
+      galaxyScale: 1,
+      galaxyOrient: 1,
+      galaxyLock: 0,
+      dots: s === 3 ? 1 : 0,
+      dotsAnchor: s === 3 ? 1 : 0,
+      dotsSep: 1,
+      usTag: 0,
+      web: 0,
+      webGather: 0,
+      webFlow: 0,
+      webHeart: 0,
+      veil: 0,
+      charm: celebration >= 0 ? 1 : 0,
+      flame: 1,
+      cakeShow: 1,
+      cakeTilt: 0,
+      cakeSink: 0,
+      moonShow: s === 3 ? 0 : 1,
+    };
+  }
+  Object.assign(V, restValues());
+  const anchors = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
+    dotsPos = new THREE.Vector3(),
+    flameRest = new THREE.Vector3(),
+    flameNow = new THREE.Vector3(),
+    sunDirection = new THREE.Vector3();
+  const anchorAt = (value) => {
+    const i = Math.max(0, Math.min(3, Math.floor(value)));
+    return dotsPos.lerpVectors(anchors[i], anchors[Math.min(4, i + 1)], Math.min(1, value - i));
+  };
+  journey.onBeat((name, timeline) => {
+    if (name === "arrive" && timeline === "pullout") {
+      interactions.setStep(3);
+      orbit.setActive(false, true);
+    }
+    if (name === "celebrate") {
+      confettiAge = 0;
+      launch();
+      magic.shoot(magic.heartTarget);
+    }
+    if (name === "home") magic.startFireworks();
+    options.onBeat?.(name, timeline);
+  });
   function render(now) {
     const dt = Math.min((now - previous) / 1000, 0.05);
     previous = now;
     if (document.hidden) return;
     elapsed += dt;
     const t = reduced ? 0 : elapsed;
+    journey.update(dt);
+    const rest = restValues();
+    for (const key in rest) {
+      if (journey.has(key)) V[key] = journey.value(key);
+      else V[key] = reduced ? rest[key] : THREE.MathUtils.damp(V[key], rest[key], 4, dt);
+    }
     open = THREE.MathUtils.damp(open, currentStep === 1 ? 1 : 0, 5, dt);
     cakeMix = THREE.MathUtils.damp(cakeMix, currentStep === 2 ? 1 : 0, 5, dt);
     if (reduced) {
@@ -631,8 +715,12 @@ export function createScene(host, options) {
     envelope.position.y = Math.sin(t * 0.65) * 0.085 - open * 0.7;
     flap.rotation.x = -open * Math.PI * 0.93;
     insert.position.y = 0.55 + open * 0.6;
-    cake.visible = cakeMix > 0.02;
-    cake.scale.setScalar(Math.max(0.001, cakeMix));
+    // The cake arrives out of the rush home (top-down, then tilting to rest), sinks away
+    // when her wish rides out, and rises back for the homecoming.
+    const arrival = journey.name === "rushHome" ? V.cakeShow : 1;
+    const cakeScale = (journey.name === "rushHome" ? 1 : cakeMix) * (1 - V.cakeSink * 0.35);
+    cake.visible = cakeScale * arrival > 0.02 && V.cakeSink < 0.98;
+    cake.scale.setScalar(Math.max(0.001, cakeScale));
     cake.rotation.y = THREE.MathUtils.damp(
       cake.rotation.y,
       interactions.rotation.cakeY,
@@ -642,15 +730,23 @@ export function createScene(host, options) {
     // In the finale the cake settles lower, leaving the wish-heart its own space.
     finaleDrop = THREE.MathUtils.damp(finaleDrop, celebration >= 0 ? 1 : 0, reduced ? 1000 : 2.5, dt);
     cake.scale.multiplyScalar(1 - finaleDrop * 0.1);
-    cake.position.y = -0.65 - finaleDrop * 0.6 + Math.sin(t * 0.65) * 0.045;
-    cake.rotation.x = THREE.MathUtils.damp(
-      cake.rotation.x,
-      interactions.rotation.cakeX,
-      6,
-      dt,
-    );
-    flame.scale.x = (0.75 + Math.sin(t * 7) * 0.08) * (1 - wishProgress * 0.8);
-    flame.scale.y = (1.8 + Math.sin(t * 8) * 0.12) * (1 - wishProgress * 0.7);
+    cake.position.set(0, -0.65 - finaleDrop * 0.6 + Math.sin(t * 0.61 + 2) * 0.045 - V.cakeSink * 3.6, 0);
+    cakeBaseX = THREE.MathUtils.damp(cakeBaseX, interactions.rotation.cakeX, 6, dt);
+    cake.rotation.x = cakeBaseX;
+    cake.updateMatrixWorld(true);
+    flame.getWorldPosition(flameRest);
+    if (arrival < 0.999 || V.cakeTilt > 0.001) {
+      // Grow and tilt about the flame, so it stays exactly where the two dots became it.
+      cake.scale.multiplyScalar(Math.max(0.001, arrival));
+      cake.rotation.x = cakeBaseX + V.cakeTilt * 1.2;
+      cake.updateMatrixWorld(true);
+      flame.getWorldPosition(flameNow);
+      cake.position.add(flameRest).sub(flameNow);
+      cake.updateMatrixWorld(true);
+    }
+    const ignite = Math.max(0.001, V.flame);
+    flame.scale.x = (0.75 + Math.sin(t * 7) * 0.08) * (1 - wishProgress * 0.8) * ignite;
+    flame.scale.y = (1.8 + Math.sin(t * 8) * 0.12) * (1 - wishProgress * 0.7) * ignite;
     flame.rotation.z = wishProgress * 0.8;
     flameInner.scale.set(
       0.7 * (1 - wishProgress * 0.8),
@@ -658,15 +754,16 @@ export function createScene(host, options) {
       0.7,
     );
     candleLight.intensity = 2 * (1 - wishProgress * 0.9);
-    lunarMoon.position.set(2, 1.65 + Math.sin(t * 0.3) * 0.07, -0.7);
+    lunarMoon.position.set(2, 1.65 + Math.sin((t * Math.PI * 2) / 11.6) * 0.07, -0.7);
     largeStar.rotation.y = Math.sin(t * 0.4) * 0.4;
     littleStar.rotation.y = t * 0.2;
-    if (celebration >= 0) {
-      celebration += dt;
+    if (celebration >= 0) celebration += dt;
+    if (confettiAge >= 0) {
+      confettiAge += dt;
       confetti.children.forEach((p) => {
         const d = p.userData,
-          live = celebration - d.delay;
-        p.visible = !reduced && live > 0 && celebration < 7;
+          live = confettiAge - d.delay;
+        p.visible = !reduced && live > 0 && confettiAge < 7;
         if (!p.visible) return;
         // Gravity, strong air drag and a sideways flutter give paper its float.
         d.velocity.y -= 5.2 * dt;
@@ -675,7 +772,7 @@ export function createScene(host, options) {
         p.position.addScaledVector(d.velocity, dt);
         p.position.x += flutter * 0.55 * dt;
         p.rotateOnAxis(d.axis, d.spin * dt * (0.6 + Math.abs(flutter) * 0.6));
-        p.scale.setScalar(Math.min(1, (7 - celebration) / 1.2));
+        p.scale.setScalar(Math.min(1, (7 - confettiAge) / 1.2));
       });
     }
     // A slow, barely-there camera drift: near things move more than the far universe.
@@ -684,16 +781,50 @@ export function createScene(host, options) {
       camera.position.y = 0.3 + Math.sin(t * 0.083 + 1.3) * 0.1;
       camera.lookAt(0, 0, 0);
     }
-    cakeDetails.update(t, wishProgress, flame.visible && cake.visible, reduced);
-    backdrop.update(dt, t, reduced);
+    cakeDetails.update(t, wishProgress, flame.visible && cake.visible && V.flame > 0.5, reduced);
+    // Lights: warm and soft at home; in space, one hard white Sun so the Earth shows a real
+    // terminator and the Moon's phase agrees with it.
+    const L = dayTheme ? 0 : V.lights;
+    ambient.intensity = THREE.MathUtils.lerp(dayTheme ? 2 : 1.8, 0.42, L);
+    key.intensity = THREE.MathUtils.lerp(2.4, 3.1, L);
+    key.color.lerpColors(keyHome, keySpace, L);
+    key.position.lerpVectors(keyHomePosition, keySpacePosition, L);
+    fill.intensity = THREE.MathUtils.lerp(0.9, 0.15, L);
+    orbit.setSun(sunDirection.copy(key.position).normalize().transformDirection(camera.matrixWorldInverse));
+    orbit.setZoom(V.solarZoom, V.solarLift);
     interactions.update(dt, t, reduced);
     orbit.update(dt, t, reduced);
     moonTouch.scale.setScalar(currentStep === 4 ? 1.8 : 1);
-    // Out among the galaxy, the moon steps aside.
-    moonShow = THREE.MathUtils.damp(moonShow, currentStep === 3 ? 0 : 1, reduced ? 1000 : 4, dt);
-    lunarMoon.scale.multiplyScalar(Math.max(0.001, moonShow));
-    lunarMoon.visible = moonShow > 0.02;
-    cosmos.update(dt, t, reduced);
+    lunarMoon.scale.multiplyScalar(Math.max(0.001, V.moonShow));
+    lunarMoon.visible = V.moonShow > 0.02 && !orbit.hidesMoon;
+    // The gold decorations and shooting stars belong to the sky at home.
+    largeStar.visible = littleStar.visible = V.home > 0.5 && currentStep !== 3;
+    magic.setHomeSky(V.home > 0.5);
+    skies.set(V);
+    skies.update(t, reduced);
+    // "Us" travels between anchors: Earth, our spot in the galaxy, the candle flame, the
+    // place the wish rises to, and the heart's notch in the cosmic web.
+    anchors[0].copy(orbit.centre);
+    anchors[2].copy(flameRest);
+    anchors[3].copy(risePoint);
+    anchors[4].copy(universe.notch);
+    let pin = null;
+    if (journey.name === "finale") pin = anchorAt(V.dotsAnchor).clone();
+    else if (journey.name === "pullout") pin = anchors[0];
+    else if (journey.name === "rushHome") pin = anchors[2];
+    galaxy.update(dt, t, reduced);
+    galaxy.pose({ opacity: V.galaxy, scale: V.galaxyScale, orient: V.galaxyOrient, lock: V.galaxyLock, pin });
+    galaxy.homeWorld(anchors[1]);
+    anchorAt(V.dotsAnchor);
+    us.update({ anchor: dotsPos, sep: 12 * V.dotsSep, opacity: V.dots, beats: currentStep === 3 && !journey.busy }, camera, view, dt, reduced);
+    universe.set({ opacity: V.web, gather: V.webGather, flow: V.webFlow, heart: V.webHeart });
+    universe.update(t, reduced);
+    if (celebration >= 0) magic.setCharm(V.charm);
+    const nextScale = V.web > 0.5 ? "universe" : V.galaxy > 0.5 ? "galaxy" : V.space > 0.5 ? "space" : "home";
+    if (nextScale !== scaleName) {
+      scaleName = nextScale;
+      options.onScale?.(scaleName);
+    }
     magic.update(dt, t, reduced, wishProgress, interactions.rotation);
     renderer.render(scene, camera);
     if (options.onMoonPosition) {
@@ -707,6 +838,10 @@ export function createScene(host, options) {
     if (currentStep === 2 && options.onFlamePosition) {
       flame.getWorldPosition(projectedFlame).project(camera);
       options.onFlamePosition(stageX(projectedFlame), stageY(projectedFlame));
+    }
+    if (options.onUs) {
+      projectedUs.copy(dotsPos).project(camera);
+      options.onUs(stageX(projectedUs), stageY(projectedUs), V.dots, V.usTag, V.veil);
     }
   }
   renderer.setAnimationLoop(render);
@@ -726,7 +861,6 @@ export function createScene(host, options) {
     hidden.forEach((object) => (object.visible = false));
   }, 400);
   function resetWish() {
-    celebration = -1;
     flame.visible = true;
     flameInner.visible = true;
     candleLight.visible = true;
@@ -734,13 +868,27 @@ export function createScene(host, options) {
   }
   return {
     setStep(step) {
+      const from = currentStep;
       currentStep = step;
+      const kind = from === 1 && step === 4 ? "liftoff" : from === 4 && step === 3 ? "pullout" : from === 3 && step === 2 ? "rushHome" : null;
+      journey.stop();
+      if (kind) journey.play(kind);
       magic.setFinale(false);
-      interactions.setStep(step);
-      orbit.setActive(step === 4);
-      cosmos.show({ galaxy: step === 3 });
+      // Stars are only catchable once the journey has arrived at the galaxy.
+      interactions.setStep(kind === "pullout" ? -1 : step);
+      orbit.setActive(step === 4 || kind === "pullout", kind === "liftoff");
+      if (step !== 3) us.reset();
       wishProgress = 0;
+      celebration = -1;
+      confettiAge = -1;
       resetWish();
+    },
+    get busy() {
+      return journey.busy;
+    },
+    // A tap during travel hurries the journey; it never jumps.
+    hurry() {
+      journey.hurry();
     },
     setWishProgress(value) {
       wishProgress = value;
@@ -760,11 +908,10 @@ export function createScene(host, options) {
     },
     celebrate() {
       magic.setFinale(true);
-      cosmos.show({ universe: true });
-      magic.shoot(flame.getWorldPosition(new THREE.Vector3()));
+      magic.setCharm(0);
       interactions.celebrate();
       celebration = 0;
-      launch();
+      journey.play("finale");
       flame.visible = false;
       flameInner.visible = false;
       candleLight.visible = false;
@@ -774,14 +921,16 @@ export function createScene(host, options) {
       magic.sendKiss(point);
     },
     setTheme(theme) {
-      ambient.intensity = theme === "day" ? 2 : 1.8;
+      dayTheme = theme === "day";
       interactions.setTheme(theme);
       orbit.setTheme(theme);
-      cosmos.setTheme(theme);
-      backdrop.setTheme(theme);
+      skies.setTheme(theme);
+      galaxy.setTheme(theme);
+      universe.setTheme(theme);
     },
     setReducedMotion(value) {
       reduced = value;
+      journey.setReduced(value);
     },
     updateName(name) {
       options.name = name;
@@ -797,8 +946,10 @@ export function createScene(host, options) {
       interactions.dispose();
       magic.dispose();
       orbit.dispose();
-      cosmos.dispose();
-      backdrop.dispose();
+      skies.dispose();
+      galaxy.dispose();
+      universe.dispose();
+      us.dispose();
       cakeDetails.dispose();
       const geometries = new Set(),
         materials = new Set();

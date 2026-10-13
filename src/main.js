@@ -18,6 +18,7 @@ import close from "@phosphor-icons/core/assets/regular/x.svg";
 import sparkle from "@phosphor-icons/core/assets/regular/sparkle.svg";
 import { createAudio } from "./sound.js";
 import { heartPoint } from "./heart.js";
+import { codaFor } from "./moonphase.js";
 
 const defaults = {
   name: "Alka",
@@ -104,8 +105,10 @@ document.querySelector("#app").innerHTML = `
       <div class="fallback-cake" aria-hidden="true"><span class="fallback-candle"><span class="fallback-fire"></span></span><span class="cake-icing"></span></div>
       <div class="finale" tabindex="-1" hidden><p>In the whole universe, it’s you.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>A few kisses, from me to you.</span></div>
       <p class="kiss-whisper" role="status" aria-live="polite" hidden></p>
+      <button class="us-tag" aria-label="That's us" tabindex="-1"><span>us</span></button>
       <div class="burst-layer" aria-hidden="true"></div>
     </main>
+    <div class="veil" aria-hidden="true"></div>
     <footer class="interaction-bar">
       <p class="hint" aria-live="polite">Unwrapping a little universe…</p>
       <div class="journey" aria-label="Adventure progress"><span class="active"></span><span></span><span></span><span></span><span></span><span></span></div>
@@ -139,6 +142,28 @@ const editor = document.querySelector("#editor");
 const form = document.querySelector("#card-form");
 const kissHit = document.querySelector(".kiss-hit");
 const kissWhisper = document.querySelector(".kiss-whisper");
+const usTag = document.querySelector(".us-tag");
+const veilLayer = document.querySelector(".veil");
+document.documentElement.dataset.scale = "home";
+// Tapping the two dots out in the galaxy.
+usTag.addEventListener("click", () => {
+  if (phase !== "stars" || scene?.busy) return;
+  const before = [gameCaption.querySelector("p").textContent, gameCaption.querySelector("h2").textContent];
+  caption(gameCaption, ["That’s us.", "Population: two."]);
+  if (soundOn) audio.chime(4);
+  clearTimeout(usLineTimer);
+  usLineTimer = setTimeout(() => {
+    if (phase === "stars") caption(gameCaption, before);
+  }, 3200);
+});
+// Any tap while the camera travels hurries the journey along (it never jumps).
+document.addEventListener(
+  "pointerdown",
+  () => {
+    if (scene?.busy) scene.hurry();
+  },
+  { capture: true, passive: true },
+);
 let kisses = 0,
   kissTimer,
   kissReveal,
@@ -175,15 +200,32 @@ function caption(el, [lead, line]) {
   void el.offsetWidth;
   el.classList.add("swap");
 }
+let sulkTimer;
 function onPullStart(auto = false) {
   if (phase !== "orbit") return;
   caption(orbitCaption, pullLines[Math.min(pulls++, pullLines.length - 1)]);
   if (!auto) hint.textContent = "Now let go.";
   if (soundOn) audio.drift();
 }
-function onReunion() {
+// Held too far for too long, the moon sulks (and turns its back). Let go and it comes home.
+function onSulk() {
   if (phase !== "orbit") return;
-  caption(orbitCaption, reunionLines[Math.min(reunions++, reunionLines.length - 1)]);
+  caption(orbitCaption, ["Fine.", "I’m sulking."]);
+  buzz([8, 40, 8]);
+  clearTimeout(sulkTimer);
+  sulkTimer = setTimeout(() => {
+    if (phase === "orbit" && orbitCaption.querySelector("h2").textContent === "I’m sulking.")
+      caption(orbitCaption, ["Still sulking.", "…mostly."]);
+  }, 2500);
+}
+function onReunion(sulked = false) {
+  if (phase !== "orbit") return;
+  clearTimeout(sulkTimer);
+  caption(
+    orbitCaption,
+    sulked ? ["Okay, I can’t even", "stay mad for one orbit."] : reunionLines[Math.min(reunions, reunionLines.length - 1)],
+  );
+  reunions++;
   experience.dataset.reunions = String(reunions);
   if (soundOn) audio.reunion();
   buzz([14, 70, 22]);
@@ -208,7 +250,7 @@ function drift() {
   );
 }
 function onEarthTap() {
-  if (phase !== "orbit") return;
+  if (phase !== "orbit" || scene?.busy) return;
   if (reunions) setPhase("stars");
   else drift();
 }
@@ -219,8 +261,13 @@ function receiveKiss(point) {
   scene?.sendKiss(point);
   if (soundOn) audio.kiss();
   if (point) buzz(12);
+  kissWhisper.classList.remove("coda");
   kissWhisper.textContent = kissWords[kisses++ % kissWords.length];
   kissWhisper.hidden = false;
+  if (kisses === 3) {
+    clearTimeout(codaTimer);
+    codaTimer = setTimeout(showCoda, 3000);
+  }
   experience.dataset.kisses = String(kisses);
   clearTimeout(kissTimer);
   kissTimer = setTimeout(() => (kissWhisper.hidden = true), 2600);
@@ -269,11 +316,27 @@ function fillCopy() {
   );
   document.title = `For ${card.name}, with love · A little orbit`;
 }
+// While the camera travels between scales, captions wait; they arrive once it settles.
+function travel(on) {
+  if (on) experience.dataset.travel = "";
+  else delete experience.dataset.travel;
+}
+let usLineTimer, codaTimer;
 function setPhase(next) {
   if (phase === "letter" && next === "orbit" && soundOn) audio.paper();
+  const journeying =
+    Boolean(scene) &&
+    ((phase === "letter" && next === "orbit") || (phase === "orbit" && next === "stars") || (phase === "stars" && next === "wish") || next === "finale");
+  if (journeying && soundOn && next !== "finale") audio.whoosh(next === "wish" ? -1 : 1);
+  travel(journeying);
   clearTimeout(kissTimer);
   clearTimeout(kissReveal);
   clearTimeout(driftTimer);
+  clearTimeout(sulkTimer);
+  clearTimeout(usLineTimer);
+  clearTimeout(codaTimer);
+  audio.hush?.(false);
+  delete document.querySelector(".finale").dataset.stage;
   orbitSection.classList.remove("drifting");
   kissWhisper.hidden = true;
   stopHold();
@@ -316,6 +379,7 @@ function setPhase(next) {
     experience.dataset.reunions = "0";
     caption(orbitCaption, ["In the whole solar system,", "you’re my world."]);
   }
+  if (journeying) hint.textContent = "";
   if (phase === "letter") {
     letter.style.removeProperty("animation");
     requestAnimationFrame(() => {
@@ -331,12 +395,78 @@ function setPhase(next) {
   if (phase === "finale") {
     kisses = 0;
     experience.dataset.kisses = "0";
-    scene?.celebrate();
+    const finale = document.querySelector(".finale");
+    if (scene) {
+      // Her wish rides out to the edge of the universe; the greeting waits for it to come home.
+      finale.dataset.stage = "away";
+      scene.celebrate();
+      if (soundOn) audio.breath?.();
+    } else {
+      if (soundOn) audio.celebrate();
+      celebrateScreen();
+      kissReveal = setTimeout(() => receiveKiss(), reduce.matches ? 0 : 1200);
+    }
+    finale.focus({ preventScroll: true });
+  }
+}
+const finaleHint = "Touch the heart for a kiss. The moon starts it again.";
+function onBeat(name, timeline) {
+  if (name === "arrive") {
+    travel(false);
+    if (timeline === "liftoff" && phase === "orbit") {
+      caption(orbitCaption, ["In the whole solar system,", "you’re my world."]);
+      hint.textContent = "Pull the moon away from the Earth.";
+    }
+    if (timeline === "pullout" && phase === "stars") {
+      caption(gameCaption, ["From way out here, you can’t even tell", "we squabble."]);
+      hint.textContent = "Tap the five golden stars.";
+      usLineTimer = setTimeout(() => {
+        if (phase === "stars" && caught.size < 5) caption(gameCaption, ["A little stardust for your wish.", "Catch the stars."]);
+      }, 3600);
+      if (soundOn) audio.chime();
+    }
+    if (timeline === "rushHome" && phase === "wish") {
+      const wish = document.querySelector(".wish-caption");
+      wish.classList.remove("swap");
+      void wish.offsetWidth;
+      wish.classList.add("swap");
+      hint.textContent = "Turn the cake. Hold the flame to make a wish.";
+    }
+  }
+  if (name === "heartbeat" && soundOn) audio.heartbeat?.();
+  if (phase !== "finale") return;
+  const finale = document.querySelector(".finale");
+  if (name === "silence") audio.hush?.(true);
+  if (name === "line") {
+    finale.dataset.stage = "line";
+    if (soundOn) audio.chime();
+  }
+  if (name === "celebrate") {
+    audio.hush?.(false);
     if (soundOn) audio.celebrate();
     celebrateScreen();
-    document.querySelector(".finale").focus({ preventScroll: true });
-    kissReveal = setTimeout(() => receiveKiss(), reduce.matches ? 0 : 1200);
   }
+  if (name === "home") {
+    finale.dataset.stage = "home";
+    travel(false);
+    hint.textContent = finaleHint;
+  }
+  if (name === "kiss") {
+    receiveKiss();
+    // A last whisper, true to tonight's sky.
+    codaTimer = setTimeout(showCoda, 12000);
+  }
+}
+function showCoda() {
+  if (phase !== "finale") return;
+  clearTimeout(kissTimer);
+  kissWhisper.textContent = codaFor(new Date()).join("\n");
+  kissWhisper.hidden = false;
+  kissWhisper.classList.add("coda");
+  kissTimer = setTimeout(() => {
+    kissWhisper.hidden = true;
+    kissWhisper.classList.remove("coda");
+  }, 6500);
 }
 function openEnvelope() {
   if (phase !== "envelope" || opening) return;
@@ -482,7 +612,7 @@ function drawConstellation() {
   ctx.stroke();
 }
 function collectStar(i) {
-  if (caught.has(i) || phase !== "stars") return;
+  if (caught.has(i) || phase !== "stars" || scene?.busy) return;
   caught.add(i);
   scene?.collectStar(i);
   const button = field.querySelectorAll(".catch-star")[i];
@@ -547,7 +677,7 @@ function finishWish() {
   setPhase("finale");
 }
 function startHold(event) {
-  if (phase !== "wish" || holdStart) return;
+  if (phase !== "wish" || holdStart || scene?.busy) return;
   if (event.type === "pointerdown") {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -731,7 +861,18 @@ import("./scene.js")
       },
       onPullStart,
       onReunion,
+      onSulk,
       onEarthTap,
+      onBeat,
+      onScale(name) {
+        document.documentElement.dataset.scale = name;
+      },
+      onUs(x, y, dots, tag, veil) {
+        usTag.style.transform = `translate3d(${x - 22}px,${y - 22}px,0)`;
+        usTag.style.setProperty("--tag", String(tag));
+        usTag.classList.toggle("live", phase === "stars" && !scene?.busy && dots > 0.5);
+        veilLayer.style.opacity = String(veil * 0.14);
+      },
       onPullEnd() {
         if (phase === "orbit" && hint.textContent === "Now let go.") hint.textContent = "";
       },
