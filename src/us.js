@@ -103,6 +103,17 @@ export function createUs(scene, pixelRatio) {
       geometry.attributes.position.needsUpdate = true;
       geometry.attributes.aSize.needsUpdate = true;
     },
+    setTheme(theme) {
+      const day = theme === "day";
+      material.blending = day ? THREE.NormalBlending : THREE.AdditiveBlending;
+      material.needsUpdate = true;
+      const colors = geometry.attributes.aColor;
+      [day ? "#4f7f9c" : "#9fd0ff", day ? "#b08a3e" : "#fff3dc", day ? "#c27b78" : "#e9b9b1"].forEach((hex, i) => {
+        const c = new THREE.Color(hex);
+        colors.setXYZ(i, c.r, c.g, c.b);
+      });
+      colors.needsUpdate = true;
+    },
     reset() {
       stretch.x = stretchTarget.x = 1;
       stretchVelocity.x = 0;

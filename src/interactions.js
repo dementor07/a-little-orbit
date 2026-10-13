@@ -17,6 +17,7 @@ export function attachInteractions({
   effects,
   orbit,
   view,
+  usAt,
   options,
 }) {
   const canvas = renderer.domElement;
@@ -182,6 +183,11 @@ export function attachInteractions({
     if (event.button !== 0 || gesture) return;
     const hit = pick(event);
     if (!hit) {
+      // Lowest priority: the two little dots out in the galaxy.
+      if (usAt?.(event.clientX, event.clientY)) {
+        options.onUsTap?.();
+        return;
+      }
       const r = canvas.getBoundingClientRect();
       effects.sky(projectCanvas((event.clientX - r.left) / r.width, (event.clientY - r.top) / r.height, 0.6));
       options.onSkyTap?.();

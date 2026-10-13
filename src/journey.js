@@ -42,6 +42,8 @@ export const timelines = {
       T("galaxyScale", 6, 1, 2.9, 5.8, "travel", true),
       T("galaxyLock", 1, 0, 4.6, 5.9),
       T("lights", 1, 0, 4.0, 5.5),
+      T("moonShow", 1, 1, 0, 2.0, "linear"),
+      T("moonShow", 1, 0, 2.0, 2.3),
     ],
     beats: [
       { at: 2.2, name: "heartbeat" },
@@ -53,7 +55,6 @@ export const timelines = {
   rushHome: {
     duration: 2.6,
     tracks: [
-      T("galaxyLock", 0, 1, 0, 0.6, "travelShort"),
       T("galaxyScale", 1, 7, 0.15, 1.2, "travelShort", true),
       T("galaxy", 1, 0, 0.2, 1.0),
       T("dots", 1, 1, 0, 1.15, "linear"),
@@ -156,6 +157,10 @@ export function createJourney({ reduced = false } = {}) {
     },
     value(key) {
       return current ? sampleKey(current, key, t) : undefined;
+    },
+    // With reduced motion, things that move or scale jump straight to where they land.
+    endValue(key) {
+      return current ? sampleKey(current, key, current.duration) : undefined;
     },
     onBeat(fn) {
       listeners.push(fn);

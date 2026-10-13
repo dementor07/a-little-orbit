@@ -23,6 +23,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     zoom = 1,
     lift = 0,
     sulkClock = 0,
+    locked = false,
     sulking = false,
     sulked = false,
     turn = 0;
@@ -224,6 +225,18 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       zoom = scale;
       lift = offsetY;
     },
+    // While the camera travels, the Moon can't be grabbed or sent drifting.
+    setLocked(value) {
+      locked = value;
+    },
+    // Snap any drift or pull back into orbit, quietly (no reunion).
+    settle() {
+      mode = "orbit";
+      velocity.set(0, 0, 0);
+      maxStretch = stretch = 0;
+      sulking = sulked = false;
+      sulkClock = 0;
+    },
     setSun(direction) {
       sunView.copy(direction);
     },
@@ -249,7 +262,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
       group.position.copy(centre);
     },
     beginPull() {
-      if (!active || mix < 0.9 || !atRest()) return false;
+      if (!active || locked || mix < 0.9 || !atRest()) return false;
       mode = "pull";
       maxStretch = 0;
       sulkClock = 0;
@@ -279,7 +292,7 @@ export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop
     },
     // A tap (or a keyboard press) sends the moon drifting off on its own, and back.
     drift() {
-      if (!active || mode !== "orbit" || mix < 0.9 || !atRest()) return false;
+      if (!active || locked || mode !== "orbit" || mix < 0.9 || !atRest()) return false;
       options.onPullStart?.(true);
       orbitPoint(scratch);
       velocity.copy(scratch.sub(centre).setY(0).normalize().multiplyScalar(6.2));

@@ -538,7 +538,7 @@ export function createScene(host, options) {
     });
   };
   const pixelRatio = renderer.getPixelRatio();
-  const skies = createSkies(scene, pixelRatio);
+  const skies = createSkies(scene, pixelRatio, renderer);
   const galaxy = createGalaxyLayer(scene, pixelRatio);
   const universe = createUniverse(scene, pixelRatio);
   const us = createUs(scene, pixelRatio);
@@ -568,13 +568,19 @@ export function createScene(host, options) {
     effects: magic,
     orbit,
     view,
+    usAt: (x, y) => usScreen.live && Math.hypot(x - usScreen.x, y - usScreen.y) < 28,
     options,
   });
+  let lastSize = "",
+    webTimer;
   const resize = () => {
     const W = host.clientWidth,
       H = host.clientHeight,
       stage = host.parentElement.getBoundingClientRect();
     if (!W || !H || !stage.width || !stage.height) return;
+    const size = [W, H, stage.left, stage.top, stage.width, stage.height].map(Math.round).join();
+    if (size === lastSize) return;
+    lastSize = size;
     Object.assign(view, {
       left: stage.left - stage.width * 0.1,
       top: stage.top,
@@ -597,15 +603,17 @@ export function createScene(host, options) {
     interactions.resize();
     magic.resize();
     orbit.resize(interactions.project);
-    skies.layout(interactions.project, camera, interactions.project(0.5, 0.56, 0));
+    skies.layout(interactions.project, camera, interactions.project(0.5, 0.56, 0), W / H);
     galaxy.place(interactions.project(0.5, 0.53, -2.2));
     const p = interactions.project;
-    universe.build(
-      magic.heartTarget,
-      p(0.06, 0.5, -1).distanceTo(p(0.94, 0.5, -1)) / 2,
-      p(0.5, 0.02, -1).distanceTo(p(0.5, 0.98, -1)) / 2,
-    );
     risePoint.copy(p(0.5, 0.4, 1));
+    // The universe is only needed at the very end: build it quietly once resizing settles.
+    const centre = magic.heartTarget.clone(),
+      halfWidth = p(0.06, 0.5, -1).distanceTo(p(0.94, 0.5, -1)) / 2,
+      halfHeight = p(0.5, 0.02, -1).distanceTo(p(0.5, 0.98, -1)) / 2;
+    clearTimeout(webTimer);
+    const build = () => alive && universe.build(centre, halfWidth, halfHeight);
+    webTimer = setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(build, { timeout: 2000 }) : build()), 700);
   };
   const risePoint = new THREE.Vector3();
   const observer = new ResizeObserver(resize);
@@ -621,6 +629,9 @@ export function createScene(host, options) {
     stageY = (v) => ((1 - v.y) / 2) * view.H - view.worldTop;
   const projectedKiss = new THREE.Vector3();
   const projectedUs = new THREE.Vector3();
+  const usScreen = { x: 0, y: 0, live: false };
+  // Things that move or scale; with reduced motion they jump to where they land.
+  const travelling = new Set(["solarZoom", "solarLift", "galaxyScale", "galaxyOrient", "galaxyLock", "dotsAnchor", "dotsSep", "cakeSink", "cakeTilt", "webGather", "webFlow"]);
 
   // Where every layer rests for each step; a playing journey overrides these exactly, and
   // when it ends values ease back to rest (they are designed to meet).
@@ -691,7 +702,7 @@ export function createScene(host, options) {
     journey.update(Math.min(raw, 0.25));
     const rest = restValues();
     for (const key in rest) {
-      if (journey.has(key)) V[key] = journey.value(key);
+      if (journey.has(key)) V[key] = reduced && travelling.has(key) ? journey.endValue(key) : journey.value(key);
       else {
         V[key] = reduced ? rest[key] : THREE.MathUtils.damp(V[key], rest[key], 4, dt);
         if (Math.abs(V[key] - rest[key]) < 1e-4) V[key] = rest[key];
@@ -797,6 +808,7 @@ export function createScene(host, options) {
     fill.intensity = THREE.MathUtils.lerp(0.9, 0.15, L);
     orbit.setSun(sunDirection.copy(key.position).normalize().transformDirection(camera.matrixWorldInverse));
     orbit.setZoom(V.solarZoom, V.solarLift);
+    orbit.setLocked(journey.busy);
     interactions.update(dt, t, reduced);
     orbit.update(dt, t, reduced);
     moonTouch.scale.setScalar(currentStep === 4 ? 1.8 : 1);
@@ -844,26 +856,24 @@ export function createScene(host, options) {
       flame.getWorldPosition(projectedFlame).project(camera);
       options.onFlamePosition(stageX(projectedFlame), stageY(projectedFlame));
     }
-    if (options.onUs) {
-      projectedUs.copy(dotsPos).project(camera);
-      options.onUs(stageX(projectedUs), stageY(projectedUs), V.dots, V.usTag, V.veil);
-    }
+    projectedUs.copy(dotsPos).project(camera);
+    usScreen.x = ((projectedUs.x + 1) / 2) * view.W;
+    usScreen.y = ((1 - projectedUs.y) / 2) * view.H;
+    usScreen.live = currentStep === 3 && !journey.busy && V.dots > 0.5;
+    options.onUs?.(stageX(projectedUs), stageY(projectedUs), V.dots, V.usTag, V.veil);
   }
   renderer.setAnimationLoop(render);
   // Compile every shader now, while the envelope floats, so later moments never stutter.
+  // Programs depend on the light count: one point light everywhere, two while the candle burns.
   setTimeout(() => {
     if (!alive) return;
-    const hidden = [];
-    scene.traverse((object) => {
-      if (!object.visible) {
-        hidden.push(object);
-        object.visible = true;
-      }
-    });
     try {
       renderer.compile(scene, camera);
+      const shown = cake.visible;
+      cake.visible = true;
+      renderer.compile(scene, camera);
+      cake.visible = shown;
     } catch {}
-    hidden.forEach((object) => (object.visible = false));
   }, 400);
   function resetWish() {
     flame.visible = true;
@@ -877,6 +887,10 @@ export function createScene(host, options) {
       currentStep = step;
       const kind = from === 1 && step === 4 ? "liftoff" : from === 4 && step === 3 ? "pullout" : from === 3 && step === 2 ? "rushHome" : null;
       journey.stop();
+      if (kind === "pullout") {
+        orbit.settle();
+        galaxy.resetSpin();
+      }
       if (kind) journey.play(kind);
       magic.setFinale(false);
       // Stars are only catchable once the journey has arrived at the galaxy.
@@ -916,6 +930,7 @@ export function createScene(host, options) {
       magic.setCharm(0);
       interactions.celebrate();
       celebration = 0;
+      galaxy.resetSpin();
       journey.play("finale");
       flame.visible = false;
       flameInner.visible = false;
@@ -932,6 +947,7 @@ export function createScene(host, options) {
       skies.setTheme(theme);
       galaxy.setTheme(theme);
       universe.setTheme(theme);
+      us.setTheme(theme);
     },
     setReducedMotion(value) {
       reduced = value;
@@ -948,6 +964,7 @@ export function createScene(host, options) {
       alive = false;
       renderer.setAnimationLoop(null);
       observer.disconnect();
+      clearTimeout(webTimer);
       interactions.dispose();
       magic.dispose();
       orbit.dispose();

@@ -105,7 +105,7 @@ document.querySelector("#app").innerHTML = `
       <div class="fallback-cake" aria-hidden="true"><span class="fallback-candle"><span class="fallback-fire"></span></span><span class="cake-icing"></span></div>
       <div class="finale" tabindex="-1" hidden><p>In the whole universe, it’s you.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>A few kisses, from me to you.</span></div>
       <p class="kiss-whisper" role="status" aria-live="polite" hidden></p>
-      <button class="us-tag" aria-label="That's us" tabindex="-1"><span>us</span></button>
+      <span class="us-tag" aria-hidden="true"><span>us</span></span>
       <div class="burst-layer" aria-hidden="true"></div>
     </main>
     <div class="veil" aria-hidden="true"></div>
@@ -146,16 +146,21 @@ const usTag = document.querySelector(".us-tag");
 const veilLayer = document.querySelector(".veil");
 document.documentElement.dataset.scale = "home";
 // Tapping the two dots out in the galaxy.
-usTag.addEventListener("click", () => {
+let usTapTimer,
+  usBefore = null;
+const US_LINE = ["That’s us.", "Population: two."];
+function onUsTap() {
   if (phase !== "stars" || scene?.busy) return;
-  const before = [gameCaption.querySelector("p").textContent, gameCaption.querySelector("h2").textContent];
-  caption(gameCaption, ["That’s us.", "Population: two."]);
+  const showing = gameCaption.querySelector("h2").textContent;
+  if (showing !== US_LINE[1]) usBefore = [gameCaption.querySelector("p").textContent, showing];
+  caption(gameCaption, US_LINE);
   if (soundOn) audio.chime(4);
-  clearTimeout(usLineTimer);
-  usLineTimer = setTimeout(() => {
-    if (phase === "stars") caption(gameCaption, before);
+  clearTimeout(usTapTimer);
+  usTapTimer = setTimeout(() => {
+    if (phase !== "stars" || gameCaption.querySelector("h2").textContent !== US_LINE[1]) return;
+    caption(gameCaption, caught.size === 5 ? ["Of every star in the galaxy,", "you’re my person."] : usBefore);
   }, 3200);
-});
+}
 // Any tap while the camera travels hurries the journey along (it never jumps).
 document.addEventListener(
   "pointerdown",
@@ -258,6 +263,8 @@ document.querySelector(".orbit-moon-hit").addEventListener("click", drift);
 document.querySelector(".orbit-earth-hit").addEventListener("click", onEarthTap);
 function receiveKiss(point) {
   if (phase !== "finale") return;
+  // Kisses wait until the heart has come home and the greeting is showing.
+  if (scene && document.querySelector(".finale").dataset.stage !== "home") return;
   scene?.sendKiss(point);
   if (soundOn) audio.kiss();
   if (point) buzz(12);
@@ -405,8 +412,9 @@ function setPhase(next) {
       if (soundOn) audio.celebrate();
       celebrateScreen();
       kissReveal = setTimeout(() => receiveKiss(), reduce.matches ? 0 : 1200);
+      codaTimer = setTimeout(showCoda, (reduce.matches ? 0 : 1200) + 12000);
+      finale.focus({ preventScroll: true });
     }
-    finale.focus({ preventScroll: true });
   }
 }
 const finaleHint = "Touch the heart for a kiss. The moon starts it again.";
@@ -450,11 +458,15 @@ function onBeat(name, timeline) {
     finale.dataset.stage = "home";
     travel(false);
     hint.textContent = finaleHint;
+    finale.focus({ preventScroll: true });
   }
   if (name === "kiss") {
     receiveKiss();
-    // A last whisper, true to tonight's sky.
-    codaTimer = setTimeout(showCoda, 12000);
+    // A last whisper, true to tonight's sky (sooner if she keeps kissing).
+    if (kisses < 3) {
+      clearTimeout(codaTimer);
+      codaTimer = setTimeout(showCoda, 12000);
+    }
   }
 }
 function showCoda() {
@@ -624,6 +636,8 @@ function collectStar(i) {
   updateScore();
   drawConstellation();
   if (caught.size === 5) {
+    clearTimeout(usTapTimer);
+    clearTimeout(usLineTimer);
     caption(gameCaption, ["Of every star in the galaxy,", "you’re my person."]);
     hint.textContent = "Tap the heart to make your wish.";
     heartControl.hidden = false;
@@ -867,10 +881,10 @@ import("./scene.js")
       onScale(name) {
         document.documentElement.dataset.scale = name;
       },
+      onUsTap,
       onUs(x, y, dots, tag, veil) {
         usTag.style.transform = `translate3d(${x - 22}px,${y - 22}px,0)`;
-        usTag.style.setProperty("--tag", String(tag));
-        usTag.classList.toggle("live", phase === "stars" && !scene?.busy && dots > 0.5);
+        usTag.style.setProperty("--tag", String(tag * Math.min(1, dots)));
         veilLayer.style.opacity = String(veil * 0.14);
       },
       onPullEnd() {

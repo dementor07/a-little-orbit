@@ -32,7 +32,7 @@ function starField(count, seed, box, palette, scaleFn) {
   return { P, C, S, D };
 }
 
-export function createSkies(scene, pixelRatio) {
+export function createSkies(scene, pixelRatio, renderer) {
   const pr = pixelRatio;
   const white = linear("#f4f1ea"),
     warm = linear("#ffd9b0"),
@@ -105,6 +105,7 @@ export function createSkies(scene, pixelRatio) {
       texture.colorSpace = THREE.SRGBColorSpace;
       bandTexture = texture;
       bandMaterial.uniforms.uMap.value = texture;
+      renderer?.initTexture(texture);
     },
     undefined,
     () => {},
@@ -175,7 +176,7 @@ export function createSkies(scene, pixelRatio) {
   return {
     // Lay the solar sky out against the frame: the Sun past the top-left corner, the ecliptic
     // running down through the Earth, the band crossing to the Earth's right.
-    layout(project, camera, earthCentre) {
+    layout(project, camera, earthCentre, aspect) {
       const sunPos = project(-0.04, -0.03, -8);
       sun.position.copy(sunPos);
       sunDistance = sunPos.distanceTo(camera.position);
@@ -199,12 +200,13 @@ export function createSkies(scene, pixelRatio) {
       band.position.copy(core);
       band.rotation.z = Math.atan2(upper.y - core.y, upper.x - core.x);
       earthNdc.copy(earthCentre).project(camera);
-      tmp.copy(earthCentre).add(new THREE.Vector3(0.56, 0, 0)).project(camera);
-      const maskR = Math.abs(tmp.x - earthNdc.x) * 1.15;
+      tmp.copy(earthCentre).add(new THREE.Vector3(0, 0.56, 0)).project(camera);
+      const maskR = Math.abs(tmp.y - earthNdc.y) * 1.15;
       space.material.uniforms.uMask.value.set(earthNdc.x, earthNdc.y, maskR);
+      space.material.uniforms.uAspect.value = aspect;
     },
     set({ home: homeWeight, space: spaceWeight, band: bandWeight, sun: sunWeight }) {
-      const night = dayTheme ? 0 : 1;
+      const night = !dayTheme;
       home.visible = homeWeight > 0.005 && night;
       home.material.uniforms.uOpacity.value = homeWeight * 0.9;
       space.visible = spaceWeight > 0.005 && night;

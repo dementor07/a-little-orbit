@@ -70,6 +70,7 @@ const starVertex = /* glsl */ `
   uniform float uTwinkle;
   uniform float uShimmer;
   uniform vec3 uMask;
+  uniform float uAspect;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
@@ -85,7 +86,7 @@ const starVertex = /* glsl */ `
     // Keep the sky clear around a planet's disc.
     if (uMask.z > 0.0) {
       vec2 ndc = gl_Position.xy / gl_Position.w;
-      vAlpha *= smoothstep(uMask.z, uMask.z * 1.6, length(ndc - uMask.xy));
+      vAlpha *= smoothstep(uMask.z, uMask.z * 1.6, length((ndc - uMask.xy) * vec2(uAspect, 1.0)));
     }
     vColor = aColor;
   }
@@ -110,6 +111,7 @@ export function starMaterial({ size = 70, maxSize = 40, twinkle = 0, shimmer = 0
       uTwinkle: { value: twinkle },
       uShimmer: { value: shimmer },
       uMask: { value: new THREE.Vector3(0, 0, 0) },
+      uAspect: { value: 1 },
     },
     vertexShader: starVertex,
     fragmentShader: starFragment,
@@ -131,7 +133,8 @@ export function eraseMaterial({ size = 70, maxSize = 90 } = {}) {
     }
   `;
   Object.assign(material, {
-    depthTest: false,
+    // Depth-tested, so the lanes darken the sky behind the gold stars, never the stars.
+    depthTest: true,
     blending: THREE.CustomBlending,
     blendEquation: THREE.AddEquation,
     blendSrc: THREE.ZeroFactor,
@@ -351,6 +354,10 @@ export function createGalaxyLayer(scene, pixelRatio) {
     },
     homeWorld(target) {
       return disc.localToWorld(target.copy(built.home));
+    },
+    // Journeys frame "us" from a known orientation, however long the galaxy has been turning.
+    resetSpin() {
+      spin = 0;
     },
     setTheme(theme) {
       dayTheme = theme === "day";
