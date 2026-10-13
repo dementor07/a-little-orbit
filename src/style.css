@@ -633,6 +633,8 @@ textarea:focus-visible {
   width: 34px;
   height: 34px;
 }
+.booting .fallback-envelope,
+.booting .envelope-hit,
 .has-webgl .fallback-envelope,
 .experience:not([data-phase="envelope"]) .fallback-envelope,
 .has-webgl .fallback-cake {
@@ -1337,4 +1339,13 @@ textarea {
 }
 .experience img {
   -webkit-user-drag: none;
+}
+
+/* The 3D scene arrives with a soft fade instead of a pop. */
+#scene canvas {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.has-webgl #scene canvas {
+  opacity: 1;
 }

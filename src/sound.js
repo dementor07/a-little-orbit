@@ -150,6 +150,10 @@ export function createAudio() {
     setEnabled(value) {
       const next = Boolean(value);
       if (disposed || (next && !createContext())) return Promise.resolve(false);
+      // On iPhone this is music, so it should play like music even with the silent switch on.
+      try {
+        if (next && navigator.audioSession) navigator.audioSession.type = "playback";
+      } catch {}
       if (next && context.state !== "running") context.resume().catch(() => {});
       if (enabled === next && (!next || context.state === "running"))
         return transition || Promise.resolve(enabled);

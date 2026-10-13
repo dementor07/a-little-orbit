@@ -4,7 +4,7 @@ import { heartPoint } from "./heart.js";
 import { kissSlots, pickKissSlot } from "./kisses.js";
 
 // A small, fixed pool keeps all touch magic bounded on mobile GPUs.
-export function createMagic({ scene, camera, host, moon, flame }) {
+export function createMagic({ scene, renderer, camera, host, moon, flame }) {
   let alive = true,
     finale = false,
     finaleMix = 0,
@@ -78,6 +78,7 @@ export function createMagic({ scene, camera, host, moon, flame }) {
       texture = map;
       kissMaterial.map = map;
       kissMaterial.needsUpdate = true;
+      renderer.initTexture(map);
     },
     undefined,
     () => {},

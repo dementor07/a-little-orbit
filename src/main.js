@@ -49,6 +49,8 @@ function readCard() {
   }
 }
 const card = readCard();
+// Until the 3D scene is ready (or known to be unavailable), show neither envelope.
+document.documentElement.classList.add("booting");
 const audio = createAudio();
 let phase = "envelope",
   // Music is on unless she turns it off. Browsers let it begin only at her first touch.
@@ -105,7 +107,7 @@ document.querySelector("#app").innerHTML = `
       <div class="burst-layer" aria-hidden="true"></div>
     </main>
     <footer class="interaction-bar">
-      <p class="hint" aria-live="polite">Drag the envelope. Tap it to open.</p>
+      <p class="hint" aria-live="polite">Unwrapping a little universe…</p>
       <div class="journey" aria-label="Adventure progress"><span class="active"></span><span></span><span></span><span></span><span></span><span></span></div>
     </footer>
   </div>
@@ -770,6 +772,8 @@ import("./scene.js")
         }
       },
     });
+    document.documentElement.classList.remove("booting");
+    if (phase === "envelope" && !opening) hint.textContent = "Drag the envelope. Tap it to open.";
     if (scene) {
       document.documentElement.classList.add("has-webgl");
       scene.setStep(steps[phase]);
@@ -779,7 +783,11 @@ import("./scene.js")
       if (phase === "finale") scene.celebrate();
     }
   })
-  .catch((error) => console.warn("Using the card fallback.", error));
+  .catch((error) => {
+    document.documentElement.classList.remove("booting");
+    if (phase === "envelope" && !opening) hint.textContent = "Tap the envelope to open it.";
+    console.warn("Using the card fallback.", error);
+  });
 reduce.addEventListener("change", (event) =>
   scene?.setReducedMotion(event.matches),
 );

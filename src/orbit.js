@@ -3,7 +3,7 @@ import { lerpAngle, rubberBand, springStep } from "./motion.js";
 
 // A little Earth with the card's moon in orbit around it. Pull the moon away and let go:
 // it always swings back.
-export function createOrbit({ scene, moon, glowTexture, emit, heartPop, options }) {
+export function createOrbit({ scene, renderer, moon, glowTexture, emit, heartPop, options }) {
   const earthRadius = 0.56,
     tilt = 0.42,
     period = 11,
@@ -50,6 +50,7 @@ export function createOrbit({ scene, moon, glowTexture, emit, heartPop, options 
       earthMaterial.map = texture;
       earthMaterial.color.set("#ffffff");
       earthMaterial.needsUpdate = true;
+      renderer.initTexture(texture);
     },
     undefined,
     () => {},
@@ -60,6 +61,7 @@ export function createOrbit({ scene, moon, glowTexture, emit, heartPop, options 
       if (!alive) return texture.dispose();
       cloudMaterial.alphaMap = texture;
       cloudMaterial.needsUpdate = true;
+      renderer.initTexture(texture);
       clouds.visible = true;
     },
     undefined,

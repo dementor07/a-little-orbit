@@ -483,9 +483,10 @@ export function createScene(host, options) {
     p.visible = false;
     confetti.add(p);
   }
-  const magic = createMagic({ scene, camera, host, moon: lunarMoon, flame });
+  const magic = createMagic({ scene, renderer, camera, host, moon: lunarMoon, flame });
   const orbit = createOrbit({
     scene,
+    renderer,
     moon: lunarMoon,
     glowTexture: magic.glowTexture,
     emit: magic.emit,
@@ -644,6 +645,21 @@ export function createScene(host, options) {
     }
   }
   renderer.setAnimationLoop(render);
+  // Compile every shader now, while the envelope floats, so later moments never stutter.
+  setTimeout(() => {
+    if (!alive) return;
+    const hidden = [];
+    scene.traverse((object) => {
+      if (!object.visible) {
+        hidden.push(object);
+        object.visible = true;
+      }
+    });
+    try {
+      renderer.compile(scene, camera);
+    } catch {}
+    hidden.forEach((object) => (object.visible = false));
+  }, 400);
   function resetWish() {
     celebration = -1;
     flame.visible = true;
