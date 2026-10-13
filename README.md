@@ -4,6 +4,8 @@ A phone-first birthday keepsake: tap the floating envelope, read the letter, col
 
 The bottom text is guidance only. Drag the 3D envelope to turn it, then tap it to open. Swipe the letter upward (or touch its printed heart) to put it away. Touch the five 3D stars, then the completed heart. Drag the cake to rotate it and hold the actual candle flame. The moon spins when touched and restarts the experience after the birthday finale. Small decorative stars also respond to touch.
 
+Double-tap the letter to receive a lipstick kiss. In the finale, the rose-gold heart charm holds endless kisses from the sender: touch it for another, or drag to turn it. The imprints stay attached to the turning heart. Stardust follows object drags, collecting stars plays ascending notes, and the moon releases a shooting star. Holding the candle draws a small spiral of light into its flame.
+
 ## Run
 
 ```sh
@@ -28,7 +30,7 @@ Music starts only when the recipient enables the sound button. No microphone, de
 
 The included `.github/workflows/deploy.yml` builds and deploys on pushes to `main`. Create or choose a repository, push this folder to its `main` branch, and set **Settings → Pages → Source → GitHub Actions**. The site has no server dependencies, and Vite's relative asset paths support both repository Pages URLs and custom domains.
 
-This workspace has not been published. The workflow is ready once a destination repository is selected.
+Repository created: [dementor07/a-little-orbit](https://github.com/dementor07/a-little-orbit). Deployment is pending: commits have not been pushed and Pages has not been enabled. Intended live URL: `https://dementor07.github.io/a-little-orbit/`. The workflow includes tests and the production build.
 
 ## Implementation
 
@@ -36,6 +38,7 @@ This workspace has not been published. The workflow is ready once a destination 
 - `src/scene.js`: Three.js envelope, paper textures, NASA-textured moon, cake, candle, confetti.
 - `src/interactions.js`: raycast picking, captured touch gestures, object rotation, collectible star meshes, and the 3D heart.
 - `src/heart.js`: one symmetric heart curve shared by the 3D scene and Canvas fallback.
+- `src/magic.js`: the rose-gold kiss charm, surface decals, a bounded stardust pool, shooting stars, and candle magic.
 - `src/sound.js`: original Web Audio music-box melody and interaction sounds.
 - `src/style.css`: a single phone-sized viewport, safe areas, accessible touch targets, daylight colours, and reduced-motion handling.
 

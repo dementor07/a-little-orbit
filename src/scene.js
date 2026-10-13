@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { attachInteractions } from "./interactions.js";
+import { createMagic } from "./magic.js";
 
 export function createScene(host, options) {
   let renderer;
@@ -425,6 +426,7 @@ export function createScene(host, options) {
     p.visible = false;
     confetti.add(p);
   }
+  const magic = createMagic({ scene, camera, host, moon: lunarMoon, flame });
   const interactions = attachInteractions({
     host,
     renderer,
@@ -436,6 +438,8 @@ export function createScene(host, options) {
     flame,
     makeStar: starMesh,
     decorations: [largeStar, littleStar],
+    kissHeart: magic.heart,
+    effects: magic,
     options,
   });
   const resize = () => {
@@ -450,6 +454,7 @@ export function createScene(host, options) {
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     interactions.resize();
+    magic.resize();
   };
   const observer = new ResizeObserver(resize);
   observer.observe(host);
@@ -458,6 +463,7 @@ export function createScene(host, options) {
     elapsed = 0;
   const projectedFlame = new THREE.Vector3();
   const projectedMoon = new THREE.Vector3();
+  const projectedKiss = new THREE.Vector3();
   function render(now) {
     const dt = Math.min((now - previous) / 1000, 0.05);
     previous = now;
@@ -529,12 +535,20 @@ export function createScene(host, options) {
       });
     }
     interactions.update(dt, t, reduced);
+    magic.update(dt, t, reduced, wishProgress, interactions.rotation);
     renderer.render(scene, camera);
     if (options.onMoonPosition) {
       lunarMoon.getWorldPosition(projectedMoon).project(camera);
       options.onMoonPosition(
         (projectedMoon.x + 1) / 2,
         (1 - projectedMoon.y) / 2,
+      );
+    }
+    if (magic.heart.visible && options.onKissPosition) {
+      magic.heart.getWorldPosition(projectedKiss).project(camera);
+      options.onKissPosition(
+        (projectedKiss.x + 1) / 2,
+        (1 - projectedKiss.y) / 2,
       );
     }
     if (currentStep === 2 && options.onFlamePosition) {
@@ -556,6 +570,7 @@ export function createScene(host, options) {
   return {
     setStep(step) {
       currentStep = step;
+      magic.setFinale(false);
       interactions.setStep(step);
       wishProgress = 0;
       resetWish();
@@ -564,7 +579,8 @@ export function createScene(host, options) {
       wishProgress = value;
     },
     collectStar(index) {
-      interactions.collectStar(index);
+      const origin = interactions.collectStar(index);
+      if (origin) magic.star(origin);
     },
     spinMoon() {
       interactions.spinMoon();
@@ -573,6 +589,8 @@ export function createScene(host, options) {
       interactions.highlightStar(index);
     },
     celebrate() {
+      magic.setFinale(true);
+      magic.shoot(flame.getWorldPosition(new THREE.Vector3()));
       interactions.celebrate();
       celebration = 0;
       flame.visible = false;
@@ -580,8 +598,12 @@ export function createScene(host, options) {
       candleLight.visible = false;
     },
     resetWish,
+    sendKiss(point) {
+      magic.sendKiss(point);
+    },
     setTheme(theme) {
       ambient.intensity = theme === "day" ? 2 : 1.8;
+      interactions.setTheme(theme);
     },
     setReducedMotion(value) {
       reduced = value;
@@ -598,6 +620,7 @@ export function createScene(host, options) {
       renderer.setAnimationLoop(null);
       observer.disconnect();
       interactions.dispose();
+      magic.dispose();
       const geometries = new Set(),
         materials = new Set();
       scene.traverse((o) => {

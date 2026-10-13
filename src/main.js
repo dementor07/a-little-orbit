@@ -12,6 +12,7 @@ import speaker from "@phosphor-icons/core/assets/regular/speaker-high.svg";
 import muted from "@phosphor-icons/core/assets/regular/speaker-slash.svg";
 import pencil from "@phosphor-icons/core/assets/regular/pencil-simple.svg";
 import heart from "@phosphor-icons/core/assets/regular/heart.svg";
+import heartFill from "@phosphor-icons/core/assets/fill/heart-fill.svg";
 import star from "@phosphor-icons/core/assets/fill/star-four-fill.svg";
 import close from "@phosphor-icons/core/assets/regular/x.svg";
 import { createAudio } from "./sound.js";
@@ -70,6 +71,7 @@ document.querySelector("#app").innerHTML = `
       <div class="orbit orbit-one" aria-hidden="true"></div><div class="orbit orbit-two" aria-hidden="true"></div>
       <div id="scene" aria-hidden="true"></div>
       <button class="moon-hit" aria-label="Spin the moon"></button>
+      <button class="kiss-hit" aria-label="Receive a kiss from me" hidden>${icon(heartFill, "kiss-fallback-heart")}</button>
       <div class="fallback-envelope" aria-hidden="true"><div class="fallback-flap"></div><span>For <span class="recipient-name"></span>,<br><em>with all my love.</em></span><span class="fallback-seal">${icon(sun)}</span></div>
       <button class="envelope-hit" aria-label="Open your birthday envelope"></button>
       <article class="letter" aria-label="A love letter for you" tabindex="-1" hidden>
@@ -87,7 +89,8 @@ document.querySelector("#app").innerHTML = `
       <div class="wish-caption" hidden><p>One last thing…</p><h2>Make a wish.</h2></div>
       <button class="flame-hit" aria-label="Blow out your birthday candle" hidden><span class="flame-ring" aria-hidden="true"></span></button>
       <div class="fallback-cake" aria-hidden="true"><span class="fallback-candle"><span class="fallback-fire"></span></span><span class="cake-icing"></span></div>
-      <div class="finale" tabindex="-1" hidden><p>Another trip around the sun.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>You’re my favourite person.</span></div>
+      <div class="finale" tabindex="-1" hidden><p>Another trip around the sun.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>A few kisses, from me to you.</span></div>
+      <p class="kiss-whisper" role="status" aria-live="polite" hidden></p>
       <div class="burst-layer" aria-hidden="true"></div>
     </main>
     <footer class="interaction-bar">
@@ -120,6 +123,35 @@ const hint = document.querySelector(".hint");
 const flameHit = document.querySelector(".flame-hit");
 const editor = document.querySelector("#editor");
 const form = document.querySelector("#card-form");
+const kissHit = document.querySelector(".kiss-hit");
+const kissWhisper = document.querySelector(".kiss-whisper");
+let kisses = 0,
+  kissTimer,
+  kissReveal,
+  lastLetterTap = 0,
+  lastLetterPoint,
+  letterTapStart;
+const kissWords = [
+  "A kiss, from me to you.",
+  "One for your smile.",
+  "One just because I love you.",
+  "And one more. Always.",
+];
+function receiveKiss(point) {
+  if (phase !== "finale") return;
+  scene?.sendKiss(point);
+  if (soundOn) audio.kiss();
+  kissWhisper.textContent = kissWords[kisses++ % kissWords.length];
+  kissWhisper.hidden = false;
+  experience.dataset.kisses = String(kisses);
+  clearTimeout(kissTimer);
+  kissTimer = setTimeout(() => (kissWhisper.hidden = true), 2600);
+  if (!scene) {
+    const r = world.getBoundingClientRect();
+    burst(r.width * 0.5, r.height * 0.4, 18);
+  }
+}
+kissHit.addEventListener("click", () => receiveKiss());
 const field = document.querySelector(".star-field");
 const starPositions = [
   [50, 77],
@@ -161,8 +193,13 @@ function fillCopy() {
   document.title = `For ${card.name}, with love · A little orbit`;
 }
 function setPhase(next) {
+  if (phase === "letter" && next === "stars" && soundOn) audio.paper();
+  clearTimeout(kissTimer);
+  clearTimeout(kissReveal);
+  kissWhisper.hidden = true;
   stopHold();
   phase = next;
+  kissHit.hidden = phase !== "finale";
   document
     .querySelector(".moon-hit")
     .setAttribute(
@@ -177,10 +214,10 @@ function setPhase(next) {
   flameHit.hidden = phase !== "wish";
   hint.textContent = {
     envelope: "Drag the envelope. Tap it to open.",
-    letter: "Swipe your letter up when you’re ready.",
+    letter: "Double-tap the paper for a kiss. Swipe up to continue.",
     stars: "Tap the five golden stars.",
     wish: "Turn the cake. Hold the flame to make a wish.",
-    finale: "Tap the moon to do it all again.",
+    finale: "Touch the heart for a kiss. The moon starts it again.",
   }[phase];
   document
     .querySelectorAll(".journey span")
@@ -199,16 +236,20 @@ function setPhase(next) {
       const long = letter.scrollHeight > letter.clientHeight + 2;
       letter.classList.toggle("long-letter", long);
       if (long)
-        hint.textContent = "Read your letter, then tap its little heart.";
+        hint.textContent =
+          "Double-tap for a kiss. Tap its little heart to continue.";
     });
     letter.focus({ preventScroll: true });
   }
   if (phase === "stars") resetStars();
   if (phase === "finale") {
+    kisses = 0;
+    experience.dataset.kisses = "0";
     scene?.celebrate();
     if (soundOn) audio.celebrate();
     celebrateScreen();
     document.querySelector(".finale").focus({ preventScroll: true });
+    kissReveal = setTimeout(() => receiveKiss(), reduce.matches ? 0 : 1200);
   }
 }
 function openEnvelope() {
@@ -217,6 +258,7 @@ function openEnvelope() {
   experience.classList.add("opening");
   scene?.setStep(1);
   if (soundOn) audio.chime();
+  if (soundOn) audio.paper();
   hint.textContent = "For you, with all my love.";
   transitionTimer = setTimeout(
     () => {
@@ -259,6 +301,60 @@ function releaseLetter(cancel = false) {
 }
 letter.addEventListener("pointerup", () => releaseLetter());
 letter.addEventListener("pointercancel", () => releaseLetter(true));
+letter.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("button")) return;
+  letterTapStart = {
+    x: event.clientX,
+    y: event.clientY,
+    time: performance.now(),
+  };
+});
+letter.addEventListener("pointerup", (event) => {
+  if (!letterTapStart || phase !== "letter") return;
+  const tap = letterTapStart;
+  letterTapStart = null;
+  if (
+    Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 9 ||
+    performance.now() - tap.time > 400
+  )
+    return;
+  const now = performance.now();
+  if (
+    now - lastLetterTap < 340 &&
+    lastLetterPoint &&
+    Math.hypot(
+      event.clientX - lastLetterPoint.x,
+      event.clientY - lastLetterPoint.y,
+    ) < 28
+  ) {
+    const r = letter.getBoundingClientRect(),
+      stamp = document.createElement("span");
+    stamp.className = "paper-kiss";
+    stamp.setAttribute("aria-hidden", "true");
+    stamp.style.cssText = `left:${Math.max(12, Math.min(letter.clientWidth - 88, event.clientX - r.left - 44))}px;top:${Math.max(12, Math.min(letter.scrollHeight - 88, event.clientY - r.top + letter.scrollTop - 44))}px;--kiss-angle:${(Math.random() - 0.5) * 34}deg;`;
+    const image = document.createElement("img");
+    image.src = `${import.meta.env.BASE_URL}assets/kiss.webp`;
+    image.alt = "";
+    stamp.append(image);
+    letter.append(stamp);
+    const marks = letter.querySelectorAll(".paper-kiss");
+    if (marks.length > 6) marks[0].remove();
+    if (soundOn) audio.kiss();
+    hint.textContent = "A little kiss, from me to you.";
+    lastLetterTap = 0;
+    clearTimeout(kissTimer);
+    kissTimer = setTimeout(() => {
+      if (phase === "letter")
+        hint.textContent = letter.classList.contains("long-letter")
+          ? "Double-tap for a kiss. Tap its little heart to continue."
+          : "Double-tap the paper for a kiss. Swipe up to continue.";
+    }, 2200);
+  } else {
+    lastLetterTap = now;
+    lastLetterPoint = { x: event.clientX, y: event.clientY };
+  }
+});
+letter.addEventListener("pointercancel", () => (letterTapStart = null));
 function burst(x, y, count = 12) {
   if (reduce.matches) return;
   const layer = document.querySelector(".burst-layer");
@@ -308,7 +404,7 @@ function collectStar(i) {
     button.classList.add("caught");
     button.disabled = true;
   }
-  if (soundOn) audio.chime();
+  if (soundOn) audio.chime(caught.size - 1);
   updateScore();
   drawConstellation();
   if (caught.size === 5) {
@@ -498,7 +594,11 @@ import("./scene.js")
     await document.fonts.ready;
     const host = document.querySelector("#scene");
     let lastX = -1000,
-      lastY = -1000;
+      lastY = -1000,
+      lastMoonX = -1000,
+      lastMoonY = -1000,
+      lastKissX = -1000,
+      lastKissY = -1000;
     scene = createScene(host, {
       name: card.name,
       theme,
@@ -507,6 +607,16 @@ import("./scene.js")
       onStarTap: collectStar,
       onHeartTap() {
         if (phase === "stars" && caught.size === 5) setPhase("wish");
+      },
+      onKissTap: receiveKiss,
+      onKissPosition(x, y) {
+        const px = x * host.clientWidth + host.offsetLeft - 60,
+          py = y * host.clientHeight - 60;
+        if (Math.abs(px - lastKissX) > 1 || Math.abs(py - lastKissY) > 1) {
+          kissHit.style.transform = `translate3d(${px}px,${py}px,0)`;
+          lastKissX = px;
+          lastKissY = py;
+        }
       },
       onWishStart: startHold,
       onWishEnd: releaseWish,
@@ -525,7 +635,13 @@ import("./scene.js")
       },
       onMoonPosition(x, y) {
         const moonButton = document.querySelector(".moon-hit");
-        moonButton.style.transform = `translate3d(${x * host.clientWidth + host.offsetLeft - 45}px,${y * host.clientHeight - 45}px,0)`;
+        const px = x * host.clientWidth + host.offsetLeft - 45,
+          py = y * host.clientHeight - 45;
+        if (Math.abs(px - lastMoonX) > 1 || Math.abs(py - lastMoonY) > 1) {
+          moonButton.style.transform = `translate3d(${px}px,${py}px,0)`;
+          lastMoonX = px;
+          lastMoonY = py;
+        }
       },
       onFlamePosition(x, y) {
         const px = x * host.clientWidth + host.offsetLeft - 52,
@@ -544,6 +660,9 @@ import("./scene.js")
       scene.setStep(
         { envelope: 0, letter: 1, stars: 3, wish: 2, finale: 2 }[phase],
       );
+      scene.setTheme(theme);
+      if (phase === "stars")
+        caught.forEach((index) => scene.collectStar(index));
       if (phase === "finale") scene.celebrate();
     }
   })
@@ -553,14 +672,19 @@ reduce.addEventListener("change", (event) =>
 );
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopHold();
+  audio.setVisible(!document.hidden);
 });
-window.addEventListener(
-  "pagehide",
-  () => {
-    clearTimeout(transitionTimer);
+window.addEventListener("pageshow", () => audio.setVisible(!document.hidden));
+window.addEventListener("pagehide", (event) => {
+  audio.setVisible(false);
+  if (event.persisted) {
     stopHold();
-    scene?.dispose();
-    audio.dispose();
-  },
-  { once: true },
-);
+    return;
+  }
+  clearTimeout(transitionTimer);
+  clearTimeout(kissTimer);
+  clearTimeout(kissReveal);
+  stopHold();
+  scene?.dispose();
+  audio.dispose();
+});
