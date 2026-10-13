@@ -37,7 +37,7 @@ test('kiss places sit on the heart without overlapping', () => {
 test('kisses fill free places near the touch, then replace the oldest', () => {
   assert.equal(pickKissSlot([], null), 0);
   assert.equal(pickKissSlot([0], { x: 0.5, y: 0.4 }), 2);
-  assert.equal(pickKissSlot([0, 2], { x: 0.5, y: 0.4 }), 1);
+  assert.equal(pickKissSlot([0, 2], { x: -0.4, y: 0.4 }), 1);
   assert.equal(pickKissSlot([3, 1, 0, 2, 4, 5], { x: 0, y: 0 }), 3);
 });
 

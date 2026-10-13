@@ -5,8 +5,8 @@ export const kissSlots = [
   { x: -0.45, y: 0.38, angle: -0.21 },
   { x: 0.45, y: 0.4, angle: 0.24 },
   { x: -0.32, y: -0.22, angle: 0.17 },
-  { x: 0.3, y: -0.24, angle: -0.17 },
-  { x: 0, y: -0.48, angle: 0.07 },
+  { x: 0.31, y: -0.24, angle: -0.17 },
+  { x: 0, y: -0.5, angle: 0.07 },
 ];
 
 // `occupied` lists slot indices oldest first. A touched kiss goes to the nearest free place;
