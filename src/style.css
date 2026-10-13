@@ -1374,3 +1374,10 @@ textarea {
 .has-webgl #scene canvas {
   opacity: 1;
 }
+/* The decorative orbit lines frame the opening only; later scenes draw their own orbits. */
+.orbit {
+  transition: opacity 0.8s ease;
+}
+.experience:not([data-phase="envelope"]):not([data-phase="letter"]) .orbit {
+  opacity: 0;
+}

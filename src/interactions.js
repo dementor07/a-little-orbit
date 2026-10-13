@@ -181,7 +181,12 @@ export function attachInteractions({
   function pointerDown(event) {
     if (event.button !== 0 || gesture) return;
     const hit = pick(event);
-    if (!hit) return;
+    if (!hit) {
+      const r = canvas.getBoundingClientRect();
+      effects.sky(projectCanvas((event.clientX - r.left) / r.width, (event.clientY - r.top) / r.height, 0.6));
+      options.onSkyTap?.();
+      return;
+    }
     event.preventDefault();
     canvas.setPointerCapture(event.pointerId);
     gesture = {

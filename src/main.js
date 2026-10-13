@@ -745,6 +745,9 @@ import("./scene.js")
       onCakeTap() {
         if (soundOn) audio.chime();
       },
+      onSkyTap() {
+        if (soundOn) audio.chime(Math.floor(Math.random() * 5));
+      },
       onSparkleTap(x, y) {
         const r = world.getBoundingClientRect();
         burst(x - r.x, y - r.y);

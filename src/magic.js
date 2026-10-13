@@ -129,7 +129,7 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
   glow.scale.set(3.7, 3.7, 1);
   heart.add(glow);
   glow.position.z = -0.3;
-  const capacity = 128,
+  const capacity = 420,
     positions = new Float32Array(capacity * 3),
     colors = new Float32Array(capacity * 3),
     velocity = new Float32Array(capacity * 3),
@@ -257,6 +257,29 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
     });
   }
   let shotCursor = 0;
+  // A firework of stardust: an even sphere of sparks that slows and drifts down.
+  function burst(origin, kind = "gold", count = 34) {
+    for (let j = 0; j < count; j++) {
+      const i = cursor++ % capacity,
+        k = i * 3,
+        u = (j + 0.5) / count,
+        polar = Math.acos(1 - 2 * u),
+        azimuth = j * 2.39996,
+        speed = 1.15 + Math.random() * 0.35;
+      positions.set([origin.x, origin.y, origin.z], k);
+      velocity[k] = Math.sin(polar) * Math.cos(azimuth) * speed;
+      velocity[k + 1] = Math.cos(polar) * speed + 0.15;
+      velocity[k + 2] = Math.sin(polar) * Math.sin(azimuth) * speed * 0.6;
+      ages[i] = 0;
+      lifetimes[i] = 1.3 + Math.random() * 0.6;
+      gravity[i] = 0.55;
+      base.set(tints[kind] || tints.gold, k);
+      colors.set(base.subarray(k, k + 3), k);
+    }
+  }
+  let skyClock = 3,
+    fireworkClock = 0.8,
+    fireworks = 0;
   function shoot(origin) {
     const shot = shooting[shotCursor++ % 3];
     shot.age = 0;
@@ -302,7 +325,7 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
         charm,
         point.clone(),
         orientation,
-        new THREE.Vector3(0.33, 0.33, 0.65),
+        new THREE.Vector3(0.27, 0.27, 0.65),
       );
       decalGeometry.applyMatrix4(charm.matrixWorld.clone().invert());
       const mark = new THREE.Mesh(decalGeometry, kissMaterial);
@@ -328,7 +351,10 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
     setFinale(value) {
       finale = value;
       heart.visible = value;
-      if (value) smokeAge = 0;
+      if (value) {
+        smokeAge = 0;
+        fireworkClock = 1.2;
+      }
       if (!value) {
         finaleMix = 0;
         kissAge = 10;
@@ -343,12 +369,37 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
         trailClock = 0;
       }
     },
+    burst,
+    // A touch on empty sky leaves a small bloom of stardust where the finger landed.
+    sky(origin) {
+      emit(origin, 14, Math.random() < 0.5 ? "gold" : "rose");
+    },
     star(origin) {
       emit(origin, 12);
     },
     update(dt, t, reduced, wishProgress, rotation) {
       trailClock += dt;
       kissAge += dt;
+      if (!reduced) {
+        // Now and then a shooting star crosses the sky, in every scene.
+        skyClock -= dt;
+        if (skyClock <= 0) {
+          skyClock = 4.5 + Math.random() * 5;
+          shoot(project(0.55 + Math.random() * 0.5, -0.05 + Math.random() * 0.3, -2.5));
+        }
+        // In the finale, soft fireworks bloom around the greeting.
+        if (finale && finaleMix > 0.9) {
+          fireworkClock -= dt;
+          if (fireworkClock <= 0) {
+            fireworkClock = 1.5 + Math.random() * 1.3;
+            const side = fireworks++ % 2 ? 1 : -1;
+            burst(
+              project(0.5 + side * (0.18 + Math.random() * 0.22), 0.08 + Math.random() * 0.3, -1.5),
+              fireworks % 3 ? "gold" : "rose",
+            );
+          }
+        }
+      }
       finaleMix = reduced
         ? finale
           ? 1
