@@ -144,6 +144,18 @@ export function createAudio() {
     return operation;
   }
   return {
+    get running() {
+      return Boolean(context && enabled && context.state === "running");
+    },
+    setEnabled(value) {
+      const next = Boolean(value);
+      if (disposed || (next && !createContext())) return Promise.resolve(false);
+      if (next && context.state !== "running") context.resume().catch(() => {});
+      if (enabled === next && (!next || context.state === "running"))
+        return transition || Promise.resolve(enabled);
+      enabled = next;
+      return synchronize(true);
+    },
     toggle() {
       if (disposed || !createContext()) return Promise.resolve(false);
       enabled = !enabled;

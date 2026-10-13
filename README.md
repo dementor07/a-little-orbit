@@ -24,7 +24,7 @@ npm run preview
 
 Open the card with `#edit` at the end of the URL to show the pencil button, which edits the recipient, letter, and sign-off. Recipients never see it. Copy a link after editing to share those changes. The card data lives in the URL fragment, which is not sent to the hosting server; anyone with the complete link can read it. Editing alone is temporary and resets on refresh. To permanently change the default copy, edit `defaults` in `src/main.js`.
 
-The music box starts when the envelope is opened (a deliberate tap) and can be muted from the speaker button. No microphone, device motion, account, analytics, or external runtime requests are used. The fonts and moon texture are bundled locally.
+Music is on by default: the music box begins at the first touch (browsers allow sound only after one) and can be muted from the speaker button. No microphone, device motion, account, analytics, or external runtime requests are used. The fonts and moon texture are bundled locally.
 
 ## GitHub Pages
 

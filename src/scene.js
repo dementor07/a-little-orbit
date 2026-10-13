@@ -137,7 +137,7 @@ export function createScene(host, options) {
     ctx.font = 'italic 22px "Cormorant Garamond"';
     ctx.fillText("Earth", 0, -4);
     ctx.font = "600 9px Manrope";
-    ctx.fillText("WITH LOVE", 0, 17);
+    ctx.fillText("14 OCT 2026", 0, 17);
     ctx.lineWidth = 2;
     for (let i = 0; i < 4; i++) {
       ctx.beginPath();

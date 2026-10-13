@@ -344,6 +344,15 @@ textarea:focus-visible {
   width: 15px;
   height: 15px;
 }
+.letter-ps {
+  text-align: left;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.45;
+  margin: -6px 0 10px;
+  opacity: 0.78;
+}
 .experience:not([data-phase="envelope"]) .opening-caption,
 .experience:not([data-phase="envelope"]) .envelope-hit {
   display: none;

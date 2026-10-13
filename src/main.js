@@ -51,8 +51,8 @@ function readCard() {
 const card = readCard();
 const audio = createAudio();
 let phase = "envelope",
-  soundOn = false,
-  soundChosen = false,
+  // Music is on unless she turns it off. Browsers let it begin only at her first touch.
+  soundOn = true,
   scene,
   opening = false,
   transitionTimer;
@@ -66,7 +66,7 @@ document.querySelector("#app").innerHTML = `
     <header class="controls">
       <span class="dedication">${icon(heart)}<span>FOR <span class="recipient-name"></span></span></span>
       <div class="controls-right">
-        <button class="icon-button sound-button" aria-label="Turn on music" aria-pressed="false">${icon(muted)}</button>
+        <button class="icon-button sound-button" aria-label="Turn off music" aria-pressed="true">${icon(speaker)}</button>
         <button class="icon-button edit-button" aria-label="Personalise your card">${icon(pencil)}</button>
         <button class="icon-button about-button" aria-label="About this card">${icon(sparkle)}</button>
       </div>
@@ -83,7 +83,7 @@ document.querySelector("#app").innerHTML = `
         <div class="letter-border">${icon(sun, "letter-sun")}
           <p class="letter-eyebrow">YOU, ME &amp; THE WHOLE UNIVERSE</p>
           <h2 class="letter-greeting"></h2><div class="letter-body"></div>
-          <p class="letter-signature"></p><button class="paper-next" aria-label="Put away your letter">${icon(heart, "letter-heart")}</button>
+          <p class="letter-signature"></p><p class="letter-ps">P.S. Next, try pulling the moon away from the Earth. It always comes back. So do I.</p><button class="paper-next" aria-label="Put away your letter">${icon(heart, "letter-heart")}</button>
         </div>
       </article>
       <section class="little-orbit" aria-label="The Earth and the moon" hidden>
@@ -184,6 +184,7 @@ function onReunion() {
   caption(orbitCaption, reunionLines[Math.min(reunions++, reunionLines.length - 1)]);
   experience.dataset.reunions = String(reunions);
   if (soundOn) audio.reunion();
+  buzz([14, 70, 22]);
   hint.textContent = "Pull again, or touch the Earth to zoom out.";
 }
 // Without WebGL (or from the keyboard), the moon drifts off and swings back by itself.
@@ -215,6 +216,7 @@ function receiveKiss(point) {
   if (phase !== "finale") return;
   scene?.sendKiss(point);
   if (soundOn) audio.kiss();
+  if (point) buzz(12);
   kissWhisper.textContent = kissWords[kisses++ % kissWords.length];
   kissWhisper.hidden = false;
   experience.dataset.kisses = String(kisses);
@@ -337,8 +339,6 @@ function setPhase(next) {
 function openEnvelope() {
   if (phase !== "envelope" || opening) return;
   opening = true;
-  // Opening the envelope is a deliberate tap, so the music box can start with it.
-  if (!soundOn && !soundChosen) toggleSound();
   experience.classList.add("opening");
   scene?.setStep(1);
   if (soundOn) audio.chime();
@@ -588,21 +588,25 @@ document.querySelectorAll(".theme-button").forEach((button) =>
     } catch {}
   }),
 );
-async function toggleSound() {
-  try {
-    soundOn = await audio.toggle();
-  } catch {
-    soundOn = false;
-  }
-  const b = document.querySelector(".sound-button");
+function wakeSound(event) {
+  if (!soundOn || audio.running || event.target.closest?.(".sound-button")) return;
+  audio.setEnabled(true);
+}
+for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
+  document.addEventListener(type, wakeSound, { capture: true, passive: true });
+document.querySelector(".sound-button").addEventListener("click", (event) => {
+  soundOn = !soundOn;
+  audio.setEnabled(soundOn);
+  const b = event.currentTarget;
   b.setAttribute("aria-pressed", String(soundOn));
   b.setAttribute("aria-label", soundOn ? "Turn off music" : "Turn on music");
   b.querySelector("img").src = soundOn ? speaker : muted;
-}
-document.querySelector(".sound-button").addEventListener("click", () => {
-  soundChosen = true;
-  toggleSound();
 });
+const buzz = (pattern) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {}
+};
 // The pencil is for the sender: open the card with #edit to personalise it.
 function syncEditing() {
   document.documentElement.classList.toggle(
