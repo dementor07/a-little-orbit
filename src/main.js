@@ -602,6 +602,9 @@ document.querySelector(".sound-button").addEventListener("click", (event) => {
   b.setAttribute("aria-label", soundOn ? "Turn off music" : "Turn on music");
   b.querySelector("img").src = soundOn ? speaker : muted;
 });
+// A long press is a gesture here, never a selection or a context menu.
+for (const type of ["selectstart", "contextmenu", "dragstart"])
+  experience.addEventListener(type, (event) => event.preventDefault());
 const buzz = (pattern) => {
   try {
     navigator.vibrate?.(pattern);
