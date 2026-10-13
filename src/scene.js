@@ -34,6 +34,23 @@ export function createScene(host, options) {
   renderer.toneMappingExposure = 1;
   host.append(renderer.domElement);
   const textures = [];
+  // The canvas fills the whole screen, but the composition is laid out in a "frame":
+  // the stage between the header and the hint, widened 10% each side, as it always was.
+  // Positions are given in that frame; the camera's view offset lets the scene run
+  // past it, under the header and hint, instead of stopping in a hard line.
+  const view = {
+    left: 0,
+    top: 0,
+    width: 1,
+    height: 1,
+    W: 1,
+    H: 1,
+    worldLeft: 0,
+    worldTop: 0,
+    toCanvas(nx, ny) {
+      return [(this.left + nx * this.width) / this.W, (this.top + ny * this.height) / this.H];
+    },
+  };
   const ambient = new THREE.HemisphereLight(0xfff4d5, 0x657f99, 1.8);
   scene.add(ambient);
   const key = new THREE.DirectionalLight(0xfff0ce, 2.4);
@@ -483,7 +500,7 @@ export function createScene(host, options) {
     p.visible = false;
     confetti.add(p);
   }
-  const magic = createMagic({ scene, renderer, camera, host, moon: lunarMoon, flame });
+  const magic = createMagic({ scene, renderer, camera, view, moon: lunarMoon, flame });
   const orbit = createOrbit({
     scene,
     renderer,
@@ -508,17 +525,31 @@ export function createScene(host, options) {
     kissHeart: magic.heart,
     effects: magic,
     orbit,
+    view,
     options,
   });
   const resize = () => {
-    const { width, height } = host.getBoundingClientRect();
-    if (!width || !height) return;
-    renderer.setSize(width, height);
-    camera.aspect = width / height;
+    const W = host.clientWidth,
+      H = host.clientHeight,
+      stage = host.parentElement.getBoundingClientRect();
+    if (!W || !H || !stage.width || !stage.height) return;
+    Object.assign(view, {
+      left: stage.left - stage.width * 0.1,
+      top: stage.top,
+      width: stage.width * 1.2,
+      height: stage.height,
+      W,
+      H,
+      worldLeft: stage.left,
+      worldTop: stage.top,
+    });
+    renderer.setSize(W, H);
+    camera.aspect = view.width / view.height;
     camera.position.z = Math.max(
       8.2,
       5.6 / (2 * Math.tan(THREE.MathUtils.degToRad(17)) * camera.aspect),
     );
+    camera.setViewOffset(view.width, view.height, -view.left, -view.top, W, H);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     interactions.resize();
@@ -533,11 +564,15 @@ export function createScene(host, options) {
   };
   const observer = new ResizeObserver(resize);
   observer.observe(host);
+  observer.observe(host.parentElement);
   resize();
   let previous = performance.now(),
     elapsed = 0;
   const projectedFlame = new THREE.Vector3();
   const projectedMoon = new THREE.Vector3();
+  // Screen position of a projected point, relative to the stage the DOM controls live in.
+  const stageX = (v) => ((v.x + 1) / 2) * view.W - view.worldLeft,
+    stageY = (v) => ((1 - v.y) / 2) * view.H - view.worldTop;
   const projectedKiss = new THREE.Vector3();
   function render(now) {
     const dt = Math.min((now - previous) / 1000, 0.05);
@@ -624,24 +659,15 @@ export function createScene(host, options) {
     renderer.render(scene, camera);
     if (options.onMoonPosition) {
       lunarMoon.getWorldPosition(projectedMoon).project(camera);
-      options.onMoonPosition(
-        (projectedMoon.x + 1) / 2,
-        (1 - projectedMoon.y) / 2,
-      );
+      options.onMoonPosition(stageX(projectedMoon), stageY(projectedMoon));
     }
     if (magic.heart.visible && options.onKissPosition) {
       magic.heart.getWorldPosition(projectedKiss).project(camera);
-      options.onKissPosition(
-        (projectedKiss.x + 1) / 2,
-        (1 - projectedKiss.y) / 2,
-      );
+      options.onKissPosition(stageX(projectedKiss), stageY(projectedKiss));
     }
     if (currentStep === 2 && options.onFlamePosition) {
       flame.getWorldPosition(projectedFlame).project(camera);
-      options.onFlamePosition(
-        (projectedFlame.x + 1) / 2,
-        (1 - projectedFlame.y) / 2,
-      );
+      options.onFlamePosition(stageX(projectedFlame), stageY(projectedFlame));
     }
   }
   renderer.setAnimationLoop(render);

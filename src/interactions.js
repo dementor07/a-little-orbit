@@ -16,6 +16,7 @@ export function attachInteractions({
   kissHeart,
   effects,
   orbit,
+  view,
   options,
 }) {
   const canvas = renderer.domElement;
@@ -94,7 +95,11 @@ export function attachInteractions({
     });
   }
   constellation.visible = false;
+  // Layout positions are fractions of the stage frame; pointers are fractions of the canvas.
   function project(nx, ny, z = 0) {
+    return projectCanvas(...view.toCanvas(nx, ny), z);
+  }
+  function projectCanvas(nx, ny, z = 0) {
     const p = new THREE.Vector3(nx * 2 - 1, 1 - ny * 2, 0.5).unproject(camera),
       direction = p.sub(camera.position).normalize();
     return camera.position
@@ -230,7 +235,7 @@ export function attachInteractions({
       if (gesture.pulling) {
         const r = canvas.getBoundingClientRect();
         orbit.pullTo(
-          project(
+          projectCanvas(
             (event.clientX - r.left) / r.width,
             (event.clientY - r.top) / r.height,
             gesture.depth,
@@ -256,7 +261,7 @@ export function attachInteractions({
     if (gesture.moved) {
       const r = canvas.getBoundingClientRect();
       effects.trail(
-        project(
+        projectCanvas(
           (event.clientX - r.left) / r.width,
           (event.clientY - r.top) / r.height,
           0.7,

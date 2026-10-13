@@ -165,9 +165,10 @@ textarea:focus-visible {
   margin: 0;
   letter-spacing: -0.5px;
 }
+/* The 3D sky runs edge to edge behind everything; nothing in it is cut off by the header or hint. */
 #scene {
-  position: absolute;
-  inset: 0 -10%;
+  position: fixed;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
   transition: opacity 0.7s;

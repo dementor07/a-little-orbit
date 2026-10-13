@@ -31,7 +31,8 @@ export function generateGalaxy({
   const random = seeded(seed);
   const positions = new Float32Array(count * 3),
     colors = new Float32Array(count * 3),
-    scales = new Float32Array(count);
+    scales = new Float32Array(count),
+    seeds = new Float32Array(count);
   for (let i = 0; i < count; i++) {
     const r = Math.pow(random(), 1.55) * radius;
     const angle = ((i % branches) / branches) * Math.PI * 2 + r * spin;
@@ -51,17 +52,20 @@ export function generateGalaxy({
         : mix(palette[1], palette[2], (t - 0.4) / 0.6);
     colors.set(colour, i * 3);
     scales[i] = 0.4 + Math.pow(random(), 7) * 2.6;
+    seeds[i] = random();
   }
-  return { positions, colors, scales };
+  return { positions, colors, scales, seeds };
 }
 
 const vertexShader = /* glsl */ `
   attribute float aScale;
+  attribute float aSeed;
   attribute vec3 aColor;
   uniform float uTime;
   uniform float uSize;
   uniform float uSpin;
   varying vec3 vColor;
+  varying float vTwinkle;
   void main() {
     vec3 p = position;
     float r = length(p.xz);
@@ -71,14 +75,18 @@ const vertexShader = /* glsl */ `
     gl_Position = projectionMatrix * mv;
     gl_PointSize = uSize * aScale / -mv.z;
     vColor = aColor;
+    // Each star breathes at its own pace; the brightest ones sparkle the most.
+    float rate = 0.8 + aSeed * 2.6;
+    vTwinkle = 1.0 - (0.18 + 0.3 * step(1.4, aScale)) * (0.5 + 0.5 * sin(uTime * rate + aSeed * 40.0));
   }
 `;
 const fragmentShader = /* glsl */ `
   uniform float uOpacity;
   varying vec3 vColor;
+  varying float vTwinkle;
   void main() {
     float glow = pow(smoothstep(0.5, 0.0, length(gl_PointCoord - 0.5)), 1.7);
-    gl_FragColor = vec4(vColor, glow * uOpacity);
+    gl_FragColor = vec4(vColor, glow * uOpacity * vTwinkle);
     #include <colorspace_fragment>
   }
 `;
@@ -107,7 +115,7 @@ export function galaxyMaterial({ size = 70, spin = 0.12 } = {}) {
 }
 
 export function galaxyGeometry(options) {
-  const { positions, colors, scales } = generateGalaxy({
+  const { positions, colors, scales, seeds } = generateGalaxy({
     ...options,
     palette: toLinear(options.palette || ["#f3d9a0", "#d99c97", "#7f9fb6"]),
   });
@@ -115,18 +123,58 @@ export function galaxyGeometry(options) {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
+  geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
   return geometry;
 }
 
 // The galaxy behind the star heart, and a quiet universe of distant ones for the finale.
 export function createCosmos(scene, pixelRatio) {
   const galaxy = new THREE.Points(
-    galaxyGeometry({ count: 6500, radius: 3.3, seed: 11 }),
+    galaxyGeometry({ count: 8500, radius: 3.3, seed: 11 }),
     galaxyMaterial({ size: 64 * pixelRatio, spin: 0.16 }),
   );
   galaxy.frustumCulled = false;
   galaxy.rotation.set(1.08, 0, -0.38);
   scene.add(galaxy);
+
+  // Soft light: a warm core, a rose haze around it, and glowing elliptical galaxies far away.
+  const glowCanvas = document.createElement("canvas");
+  glowCanvas.width = glowCanvas.height = 128;
+  const glowContext = glowCanvas.getContext("2d"),
+    gradient = glowContext.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.22, "rgba(255,255,255,0.45)");
+  gradient.addColorStop(0.55, "rgba(255,255,255,0.1)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  glowContext.fillStyle = gradient;
+  glowContext.fillRect(0, 0, 128, 128);
+  const glowTexture = new THREE.CanvasTexture(glowCanvas);
+  glowTexture.colorSpace = THREE.SRGBColorSpace;
+  const glows = [];
+  function glow(parent, colour, scale, strength, position = [0, 0, 0], rotation = 0, stretch = 1) {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: colour,
+        transparent: true,
+        opacity: 0,
+        rotation,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    sprite.scale.set(scale * stretch, scale, 1);
+    sprite.position.set(...position);
+    sprite.userData.strength = strength;
+    parent.add(sprite);
+    glows.push(sprite);
+    return sprite;
+  }
+  const core = new THREE.Group();
+  galaxy.add(core);
+  glow(core, "#ffe2b0", 1.2, 0.42);
+  glow(core, "#f3c7a4", 3, 0.22);
+  glow(core, "#c98f9a", 6.2, 0.14);
 
   const universe = new THREE.Group();
   scene.add(universe);
@@ -173,10 +221,28 @@ export function createCosmos(scene, pixelRatio) {
   dustGeometry.setAttribute("position", new THREE.BufferAttribute(dust, 3));
   dustGeometry.setAttribute("aColor", new THREE.BufferAttribute(dustColor, 3));
   dustGeometry.setAttribute("aScale", new THREE.BufferAttribute(dustScale, 1));
+  const dustSeeds = new Float32Array(dustCount);
+  for (let i = 0; i < dustCount; i++) dustSeeds[i] = random();
+  dustGeometry.setAttribute("aSeed", new THREE.BufferAttribute(dustSeeds, 1));
   const dustMaterial = galaxyMaterial({ size: 40 * pixelRatio, spin: 0 });
   const dustPoints = new THREE.Points(dustGeometry, dustMaterial);
   dustPoints.frustumCulled = false;
   universe.add(dustPoints);
+  const distant = new THREE.Group();
+  universe.add(distant);
+  [
+    [-1.9, 3.4, 0.9, 0.4, 2.1],
+    [3.6, 2.6, 0.7, -0.6, 1.8],
+    [-3.7, -0.4, 0.6, 0.9, 2.4],
+    [1.4, -5.1, 0.8, 0.2, 1.6],
+    [3.9, -1.9, 0.55, -1.1, 2],
+    [-1.2, 6.3, 0.5, 0.7, 2.2],
+  ].forEach(([x, y, size, turn, stretch], i) => {
+    glow(distant, i % 2 ? "#f2dcc0" : "#e8d6e6", size, 0.5, [x, y, -1.5], turn, stretch);
+    glow(distant, "#fff4dc", size * 0.28, 0.9, [x, y, -1.5], turn, stretch * 0.8);
+  });
+  glow(distant, "#c98f9a", 7.5, 0.07, [-2.4, 2.2, -3]);
+  glow(distant, "#7f9fb6", 8.5, 0.07, [2.6, -3.4, -3]);
 
   let galaxyMix = 0,
     universeMix = 0,
@@ -219,11 +285,20 @@ export function createCosmos(scene, pixelRatio) {
       farMaterial.uniforms.uTime.value = time;
       farMaterial.uniforms.uOpacity.value = universeMix * 0.42;
       dustMaterial.uniforms.uOpacity.value = universeMix * 0.5;
+      dustMaterial.uniforms.uTime.value = time;
       universe.children.forEach((child, i) => {
-        if (child !== dustPoints) child.rotation.z += dt * (reduced ? 0 : 0.02 + i * 0.004);
+        if (child.isPoints && child !== dustPoints)
+          child.rotation.z += dt * (reduced ? 0 : 0.02 + i * 0.004);
+      });
+      const breathe = reduced ? 1 : 0.92 + Math.sin(t * 0.8) * 0.08;
+      glows.forEach((sprite) => {
+        const mixAmount = sprite.parent === distant ? universeMix : galaxyMix;
+        sprite.material.opacity = mixAmount * sprite.userData.strength * (sprite.parent === core ? breathe : 1);
       });
     },
     dispose() {
+      glows.forEach((sprite) => sprite.material.dispose());
+      glowTexture.dispose();
       galaxy.geometry.dispose();
       galaxy.material.dispose();
       farShapes.forEach((g) => g.dispose());

@@ -4,7 +4,7 @@ import { heartPoint } from "./heart.js";
 import { kissSlots, pickKissSlot } from "./kisses.js";
 
 // A small, fixed pool keeps all touch magic bounded on mobile GPUs.
-export function createMagic({ scene, renderer, camera, host, moon, flame }) {
+export function createMagic({ scene, renderer, camera, view, moon, flame }) {
   let alive = true,
     finale = false,
     finaleMix = 0,
@@ -249,14 +249,15 @@ export function createMagic({ scene, renderer, camera, host, moon, flame }) {
     shot.end.copy(shot.start).add(new THREE.Vector3(-4.4, -2.2, 0.6));
   }
   function project(nx, ny, z) {
-    const p = new THREE.Vector3(nx * 2 - 1, 1 - ny * 2, 0.5).unproject(camera),
+    const [cx, cy] = view.toCanvas(nx, ny);
+    const p = new THREE.Vector3(cx * 2 - 1, 1 - cy * 2, 0.5).unproject(camera),
       dir = p.sub(camera.position).normalize();
     return camera.position
       .clone()
       .addScaledVector(dir, (z - camera.position.z) / dir.z);
   }
   function resize() {
-    heartTarget.copy(project(0.5, host.clientHeight < 520 ? 0.41 : 0.37, 1));
+    heartTarget.copy(project(0.5, view.height < 520 ? 0.41 : 0.37, 1));
     heart.position.copy(heartTarget);
   }
   const point = new THREE.Vector3(),

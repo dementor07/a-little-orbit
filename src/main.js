@@ -721,8 +721,8 @@ import("./scene.js")
       },
       onKissTap: receiveKiss,
       onKissPosition(x, y) {
-        const px = x * host.clientWidth + host.offsetLeft - 60,
-          py = y * host.clientHeight - 60;
+        const px = x - 60,
+          py = y - 60;
         if (Math.abs(px - lastKissX) > 1 || Math.abs(py - lastKissY) > 1) {
           kissHit.style.transform = `translate3d(${px}px,${py}px,0)`;
           lastKissX = px;
@@ -752,8 +752,8 @@ import("./scene.js")
       },
       onMoonPosition(x, y) {
         const moonButton = document.querySelector(".moon-hit");
-        const px = x * host.clientWidth + host.offsetLeft - 45,
-          py = y * host.clientHeight - 45;
+        const px = x - 45,
+          py = y - 45;
         if (Math.abs(px - lastMoonX) > 1 || Math.abs(py - lastMoonY) > 1) {
           moonButton.style.transform = `translate3d(${px}px,${py}px,0)`;
           lastMoonX = px;
@@ -761,8 +761,8 @@ import("./scene.js")
         }
       },
       onFlamePosition(x, y) {
-        const px = x * host.clientWidth + host.offsetLeft - 52,
-          py = y * host.clientHeight - 55;
+        const px = x - 52,
+          py = y - 55;
         if (Math.abs(px - lastX) > 1 || Math.abs(py - lastY) > 1) {
           flameHit.style.transform = `translate3d(${px}px,${py}px,0)`;
           flameHit.style.left = "0";
