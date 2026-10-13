@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { attachInteractions } from "./interactions.js";
 import { createMagic } from "./magic.js";
+import { createOrbit } from "./orbit.js";
+import { createCosmos } from "./galaxy.js";
 
 export function createScene(host, options) {
   let renderer;
@@ -19,7 +21,9 @@ export function createScene(host, options) {
     cakeMix = 0,
     celebration = -1,
     alive = true,
-    wishProgress = 0;
+    wishProgress = 0,
+    moonShow = 1,
+    finaleDrop = 0;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
   camera.position.set(0, 0.3, 10.7);
@@ -98,6 +102,53 @@ export function createScene(host, options) {
     ctx.fillText("A LITTLE BIRTHDAY MAGIC", 84, 515);
     drawStar(ctx, 923, 517, 24, "#8c7c47");
     drawStar(ctx, 875, 558, 10, "#8c7c47");
+    // A postmark from home, inked a little unevenly like a real one.
+    ctx.save();
+    ctx.translate(858, 228);
+    ctx.rotate(-0.16);
+    ctx.strokeStyle = "#6d6440";
+    ctx.fillStyle = "#6d6440";
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 66, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 47, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = "600 12px Manrope";
+    ctx.letterSpacing = "0px";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const ringText = (text, start, direction) => {
+      const step = 0.155;
+      [...text].forEach((ch, i) => {
+        const a = start + direction * (i - (text.length - 1) / 2) * step;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.translate(0, direction > 0 ? -56.5 : 56.5);
+        ctx.fillText(ch, 0, 0);
+        ctx.restore();
+      });
+    };
+    ringText("THE MILKY WAY", 0, 1);
+    ringText("SOLAR SYSTEM", 0, -1);
+    ctx.font = 'italic 22px "Cormorant Garamond"';
+    ctx.fillText("Earth", 0, -4);
+    ctx.font = "600 9px Manrope";
+    ctx.fillText("WITH LOVE", 0, 17);
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      for (let x = 78; x <= 134; x += 4) {
+        const y = -24 + i * 16 + Math.sin(x * 0.075) * 4;
+        if (x === 78) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   frontTexture = paperTexture("#e5cb87", frontDrawing);
   const envelope = new THREE.Group();
@@ -133,23 +184,23 @@ export function createScene(host, options) {
       [710, 160, 8],
     ];
     positions.forEach(([x, y, r]) => drawStar(ctx, x, y, r));
+    ctx.fillStyle = "#eee8d0";
+    ctx.font = 'italic 46px "Cormorant Garamond"';
+    ctx.textAlign = "center";
+    ctx.fillText("my person, in every universe", 512, 205);
     ctx.strokeStyle = "#cfb878a0";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.ellipse(505, 300, 330, 140, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(505, 400, 330, 120, -0.3, 0, Math.PI * 2);
     ctx.stroke();
     ctx.fillStyle = "#e6ce87";
     ctx.beginPath();
-    ctx.arc(530, 295, 75, 0, Math.PI * 2);
+    ctx.arc(530, 395, 64, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#233e53";
     ctx.beginPath();
-    ctx.arc(558, 274, 70, 0, Math.PI * 2);
+    ctx.arc(554, 377, 60, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#eee8d0";
-    ctx.font = 'italic 44px "Cormorant Garamond"';
-    ctx.textAlign = "center";
-    ctx.fillText("you are my universe", 512, 500);
   });
   const insert = new THREE.Mesh(
     new THREE.PlaneGeometry(3.94, 2.65),
@@ -248,6 +299,12 @@ export function createScene(host, options) {
   lunarMoon.position.set(2, 1.65, -0.7);
   lunarMoon.rotation.y = 1.1;
   scene.add(lunarMoon);
+  // A larger, invisible reach for the moon while it is small enough to pull.
+  const moonTouch = new THREE.Mesh(
+    new THREE.SphereGeometry(0.48, 16, 12),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  lunarMoon.add(moonTouch);
   new THREE.TextureLoader().load(
     `${import.meta.env.BASE_URL}assets/moon.jpg`,
     (texture) => {
@@ -427,6 +484,15 @@ export function createScene(host, options) {
     confetti.add(p);
   }
   const magic = createMagic({ scene, camera, host, moon: lunarMoon, flame });
+  const orbit = createOrbit({
+    scene,
+    moon: lunarMoon,
+    glowTexture: magic.glowTexture,
+    emit: magic.emit,
+    heartPop: magic.heartPop,
+    options,
+  });
+  const cosmos = createCosmos(scene, renderer.getPixelRatio());
   const interactions = attachInteractions({
     host,
     renderer,
@@ -440,6 +506,7 @@ export function createScene(host, options) {
     decorations: [largeStar, littleStar],
     kissHeart: magic.heart,
     effects: magic,
+    orbit,
     options,
   });
   const resize = () => {
@@ -455,6 +522,13 @@ export function createScene(host, options) {
     camera.updateMatrixWorld();
     interactions.resize();
     magic.resize();
+    orbit.resize(interactions.project);
+    const far = (x, y) => interactions.project(x, y, -7);
+    cosmos.place(
+      interactions.project(0.5, 0.53, -2.2),
+      far(0, 0.5).distanceTo(far(1, 0.5)) / 2,
+      far(0.5, 0).distanceTo(far(0.5, 1)) / 2,
+    );
   };
   const observer = new ResizeObserver(resize);
   observer.observe(host);
@@ -476,7 +550,7 @@ export function createScene(host, options) {
       open = currentStep === 1 ? 1 : 0;
       cakeMix = currentStep === 2 ? 1 : 0;
     }
-    envelope.visible = currentStep !== 3 && cakeMix < 0.98;
+    envelope.visible = currentStep !== 3 && currentStep !== 4 && cakeMix < 0.98;
     envelope.scale.setScalar(Math.max(0.001, 1 - cakeMix));
     envelope.rotation.y = THREE.MathUtils.damp(
       envelope.rotation.y,
@@ -501,7 +575,10 @@ export function createScene(host, options) {
       3,
       dt,
     );
-    cake.position.y = -0.65 + Math.sin(t * 0.65) * 0.045;
+    // In the finale the cake settles lower, leaving the wish-heart its own space.
+    finaleDrop = THREE.MathUtils.damp(finaleDrop, celebration >= 0 ? 1 : 0, reduced ? 1000 : 2.5, dt);
+    cake.scale.multiplyScalar(1 - finaleDrop * 0.1);
+    cake.position.y = -0.65 - finaleDrop * 0.6 + Math.sin(t * 0.65) * 0.045;
     cake.rotation.x = THREE.MathUtils.damp(
       cake.rotation.x,
       interactions.rotation.cakeX,
@@ -517,7 +594,7 @@ export function createScene(host, options) {
       0.7,
     );
     candleLight.intensity = 2 * (1 - wishProgress * 0.9);
-    lunarMoon.position.y = 1.65 + Math.sin(t * 0.3) * 0.07;
+    lunarMoon.position.set(2, 1.65 + Math.sin(t * 0.3) * 0.07, -0.7);
     largeStar.rotation.y = Math.sin(t * 0.4) * 0.4;
     littleStar.rotation.y = t * 0.2;
     if (celebration >= 0) {
@@ -535,6 +612,13 @@ export function createScene(host, options) {
       });
     }
     interactions.update(dt, t, reduced);
+    orbit.update(dt, t, reduced);
+    moonTouch.scale.setScalar(currentStep === 4 ? 1.8 : 1);
+    // Out among the galaxy, the moon steps aside.
+    moonShow = THREE.MathUtils.damp(moonShow, currentStep === 3 ? 0 : 1, reduced ? 1000 : 4, dt);
+    lunarMoon.scale.multiplyScalar(Math.max(0.001, moonShow));
+    lunarMoon.visible = moonShow > 0.02;
+    cosmos.update(dt, t, reduced);
     magic.update(dt, t, reduced, wishProgress, interactions.rotation);
     renderer.render(scene, camera);
     if (options.onMoonPosition) {
@@ -572,6 +656,8 @@ export function createScene(host, options) {
       currentStep = step;
       magic.setFinale(false);
       interactions.setStep(step);
+      orbit.setActive(step === 4);
+      cosmos.show({ galaxy: step === 3 });
       wishProgress = 0;
       resetWish();
     },
@@ -585,11 +671,15 @@ export function createScene(host, options) {
     spinMoon() {
       interactions.spinMoon();
     },
+    driftMoon() {
+      return orbit.drift();
+    },
     highlightStar(index) {
       interactions.highlightStar(index);
     },
     celebrate() {
       magic.setFinale(true);
+      cosmos.show({ universe: true });
       magic.shoot(flame.getWorldPosition(new THREE.Vector3()));
       interactions.celebrate();
       celebration = 0;
@@ -604,6 +694,8 @@ export function createScene(host, options) {
     setTheme(theme) {
       ambient.intensity = theme === "day" ? 2 : 1.8;
       interactions.setTheme(theme);
+      orbit.setTheme(theme);
+      cosmos.setTheme(theme);
     },
     setReducedMotion(value) {
       reduced = value;
@@ -621,6 +713,8 @@ export function createScene(host, options) {
       observer.disconnect();
       interactions.dispose();
       magic.dispose();
+      orbit.dispose();
+      cosmos.dispose();
       const geometries = new Set(),
         materials = new Set();
       scene.traverse((o) => {

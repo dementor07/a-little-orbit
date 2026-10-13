@@ -15,6 +15,7 @@ export function attachInteractions({
   decorations,
   kissHeart,
   effects,
+  orbit,
   options,
 }) {
   const canvas = renderer.domElement;
@@ -157,7 +158,8 @@ export function attachInteractions({
       1 - ((event.clientY - r.top) / r.height) * 2,
     );
     raycaster.setFromCamera(ndc, camera);
-    const objects = [moon, ...decorations.filter((object) => object.visible)];
+    const objects = [moon, ...decorations].filter((object) => object.visible);
+    if (step === 4) objects.push(orbit.touch);
     if (step === 0) objects.push(envelope);
     if (step === 2) objects.push(cake);
     if (done && kissHeart.visible) objects.push(kissHeart);
@@ -220,7 +222,22 @@ export function attachInteractions({
         0.5,
       );
     }
-    if (gesture.action === "moon") {
+    if (gesture.action === "moon" && step === 4) {
+      if (gesture.moved && !gesture.pulling && orbit.beginPull()) {
+        gesture.pulling = true;
+        gesture.depth = orbit.pullDepth;
+      }
+      if (gesture.pulling) {
+        const r = canvas.getBoundingClientRect();
+        orbit.pullTo(
+          project(
+            (event.clientX - r.left) / r.width,
+            (event.clientY - r.top) / r.height,
+            gesture.depth,
+          ),
+        );
+      }
+    } else if (gesture.action === "moon") {
       moonSpin += dx * 0.025;
       moonImpulse = dx * 0.04;
     }
@@ -258,7 +275,17 @@ export function attachInteractions({
       options.onWishEnd?.();
       return;
     }
+    if (g.pulling) {
+      orbit.release();
+      options.onPullEnd?.();
+      return;
+    }
     if (g.moved) return;
+    if (g.action === "moon" && step === 4) {
+      orbit.drift();
+      return;
+    }
+    if (g.action === "earth") options.onEarthTap?.();
     if (g.action === "envelope") options.onEnvelopeTap?.();
     if (g.action === "star") options.onStarTap?.(g.index);
     if (g.action === "heart" && collected.size === 5) options.onHeartTap?.();
@@ -278,6 +305,10 @@ export function attachInteractions({
     }
   }
   function cancel() {
+    if (gesture?.pulling) {
+      orbit.release();
+      options.onPullEnd?.();
+    }
     gesture = null;
     canvas.style.cursor = "default";
     options.onWishCancel?.();
@@ -290,13 +321,14 @@ export function attachInteractions({
   return {
     rotation,
     resize,
+    project,
     setStep(value) {
       step = value;
       done = false;
       cancel();
       constellation.visible = step === 3;
       stars.forEach((s) => (s.object.visible = step === 3));
-      decorations.forEach((object) => (object.visible = step !== 3));
+      decorations.forEach((object) => (object.visible = step !== 3 && step !== 4));
       if (step === 3) {
         collected.clear();
         stars.forEach((s) => {

@@ -203,6 +203,17 @@ export function createAudio() {
       source.start(now);
       source.stop(now + 0.19);
     },
+    // A small rising sigh as they drift apart, and a resolving chime when they meet again.
+    drift() {
+      play(329.63, 0, 0.032, 1.1);
+      play(293.66, 0.22, 0.026, 1.2);
+    },
+    reunion() {
+      play(392, 0, 0.05, 1.3);
+      play(523.25, 0.16, 0.08, 2);
+      play(659.25, 0.3, 0.035, 1.6);
+      play(1046.5, 0.42, 0.016, 1.2);
+    },
     celebrate() {
       [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => play(f, i * 0.18));
     },

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DecalGeometry } from "three/addons/geometries/DecalGeometry.js";
 import { heartPoint } from "./heart.js";
+import { kissSlots, pickKissSlot } from "./kisses.js";
 
 // A small, fixed pool keeps all touch magic bounded on mobile GPUs.
 export function createMagic({ scene, camera, host, moon, flame }) {
@@ -8,6 +9,8 @@ export function createMagic({ scene, camera, host, moon, flame }) {
     finale = false,
     finaleMix = 0,
     kissAge = 10,
+    smokeAge = 10,
+    smokeClock = 0,
     texture;
   let cursor = 0,
     trailClock = 0;
@@ -79,7 +82,10 @@ export function createMagic({ scene, camera, host, moon, flame }) {
     undefined,
     () => {},
   );
-  const marks = [];
+  const marks = [],
+    occupied = [];
+  const heartTarget = new THREE.Vector3(),
+    wick = new THREE.Vector3();
   const warmLight = new THREE.PointLight(0xffcc9d, 0, 4);
   warmLight.position.set(0, 0.8, 1.5);
   scene.add(warmLight);
@@ -112,7 +118,9 @@ export function createMagic({ scene, camera, host, moon, flame }) {
     colors = new Float32Array(capacity * 3),
     velocity = new Float32Array(capacity * 3),
     ages = new Float32Array(capacity).fill(10),
-    lifetimes = new Float32Array(capacity);
+    lifetimes = new Float32Array(capacity),
+    base = new Float32Array(capacity * 3),
+    gravity = new Float32Array(capacity);
   positions.fill(1000);
   const dustGeometry = new THREE.BufferGeometry();
   dustGeometry.setAttribute(
@@ -134,24 +142,57 @@ export function createMagic({ scene, camera, host, moon, flame }) {
   );
   dust.frustumCulled = false;
   scene.add(dust);
-  function emit(origin, count = 9, rose = false) {
+  const tints = {
+    gold: [1, 0.8, 0.42],
+    rose: [1, 0.55, 0.55],
+    smoke: [0.36, 0.38, 0.42],
+  };
+  function emit(origin, count = 9, kind = "gold") {
+    const smoke = kind === "smoke";
     for (let j = 0; j < count; j++) {
       const i = cursor++ % capacity,
         k = i * 3,
         a = Math.random() * Math.PI * 2,
-        speed = 0.3 + Math.random() * 0.55;
+        speed = smoke ? 0.06 : 0.3 + Math.random() * 0.55;
       positions[k] = origin.x;
       positions[k + 1] = origin.y;
       positions[k + 2] = origin.z;
       velocity[k] = Math.cos(a) * speed;
-      velocity[k + 1] = 0.35 + Math.random() * 0.6;
+      velocity[k + 1] = smoke ? 0.32 + Math.random() * 0.18 : 0.35 + Math.random() * 0.6;
       velocity[k + 2] = Math.sin(a) * speed * 0.5;
       ages[i] = 0;
-      lifetimes[i] = 0.8 + Math.random() * 0.8;
-      colors[k] = 1;
-      colors[k + 1] = rose ? 0.55 : 0.8;
-      colors[k + 2] = rose ? 0.55 : 0.42;
+      lifetimes[i] = smoke ? 1.6 + Math.random() * 0.8 : 0.8 + Math.random() * 0.8;
+      gravity[i] = smoke ? -0.05 : 0.15;
+      base.set(tints[kind] || tints.gold, k);
+      colors.set(base.subarray(k, k + 3), k);
     }
+  }
+  // A small heart outline that blooms and fades, for reunions.
+  const pops = [0, 1].map(() => {
+    const points = [];
+    for (let i = 0; i < 96; i++) {
+      const p = heartPoint((i / 96) * Math.PI * 2);
+      points.push(new THREE.Vector3(p.x, p.y, 0));
+    }
+    const line = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: "#eab0a8",
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    line.visible = false;
+    scene.add(line);
+    return { line, age: 5 };
+  });
+  let popCursor = 0;
+  function heartPop(origin) {
+    const pop = pops[popCursor++ % pops.length];
+    pop.age = 0;
+    pop.line.position.copy(origin);
   }
   const wishPositions = new Float32Array(36),
     wishGeometry = new THREE.BufferGeometry();
@@ -214,7 +255,8 @@ export function createMagic({ scene, camera, host, moon, flame }) {
       .addScaledVector(dir, (z - camera.position.z) / dir.z);
   }
   function resize() {
-    heart.position.copy(project(0.5, host.clientHeight < 520 ? 0.43 : 0.39, 1));
+    heartTarget.copy(project(0.5, host.clientHeight < 520 ? 0.41 : 0.37, 1));
+    heart.position.copy(heartTarget);
   }
   const point = new THREE.Vector3(),
     orientation = new THREE.Euler(),
@@ -223,40 +265,38 @@ export function createMagic({ scene, camera, host, moon, flame }) {
     if (!finale) return;
     kissAge = 0;
     heart.updateWorldMatrix(true, true);
-    const local = hitPoint
-      ? charm.worldToLocal(hitPoint.clone())
-      : new THREE.Vector3(
-          (Math.random() - 0.5) * 0.6,
-          0.05 + (Math.random() - 0.5) * 0.5,
-          0,
-        );
-    local.x = THREE.MathUtils.clamp(local.x, -0.55, 0.55);
-    local.y = THREE.MathUtils.clamp(local.y, -0.45, 0.4);
-    local.z = geometry.boundingBox.max.z + 0.01;
-    point.copy(local);
+    const touch = hitPoint ? charm.worldToLocal(hitPoint.clone()) : null;
+    const index = pickKissSlot(occupied, touch),
+      slot = kissSlots[index],
+      taken = occupied.indexOf(index);
+    if (taken >= 0) {
+      occupied.splice(taken, 1);
+      const [old] = marks.splice(taken, 1);
+      old.removeFromParent();
+      old.geometry.dispose();
+    }
+    point.set(slot.x, slot.y, geometry.boundingBox.max.z + 0.01);
     charm.localToWorld(point);
     charm.getWorldQuaternion(quaternion);
     orientation.setFromQuaternion(quaternion);
+    orientation.z += slot.angle;
     if (texture) {
       const decalGeometry = new DecalGeometry(
         charm,
         point.clone(),
         orientation,
-        new THREE.Vector3(0.48, 0.48, 0.65),
+        new THREE.Vector3(0.33, 0.33, 0.65),
       );
       decalGeometry.applyMatrix4(charm.matrixWorld.clone().invert());
       const mark = new THREE.Mesh(decalGeometry, kissMaterial);
       charm.add(mark);
       marks.push(mark);
-      if (marks.length > 8) {
-        const old = marks.shift();
-        old.removeFromParent();
-        old.geometry.dispose();
-      }
+      occupied.push(index);
     }
-    emit(point, 18, true);
+    emit(point, 18, "rose");
   }
   function clearMarks() {
+    occupied.length = 0;
     marks.splice(0).forEach((mark) => {
       mark.removeFromParent();
       mark.geometry.dispose();
@@ -264,10 +304,14 @@ export function createMagic({ scene, camera, host, moon, flame }) {
   }
   return {
     heart,
+    glowTexture,
+    emit,
+    heartPop,
     resize,
     setFinale(value) {
       finale = value;
       heart.visible = value;
+      if (value) smokeAge = 0;
       if (!value) {
         finaleMix = 0;
         kissAge = 10;
@@ -298,6 +342,24 @@ export function createMagic({ scene, camera, host, moon, flame }) {
         : Math.exp(-Math.pow((kissAge - 0.12) / 0.09, 2)) * 0.12 +
           Math.exp(-Math.pow((kissAge - 0.36) / 0.11, 2)) * 0.065;
       heart.scale.setScalar(Math.max(0.001, 0.66 * finaleMix * (1 + beat)));
+      // The wish rises out of the candle and becomes the heart.
+      flame.getWorldPosition(wick);
+      heart.position.lerpVectors(wick, heartTarget, 1 - Math.pow(1 - finaleMix, 3));
+      smokeAge += dt;
+      smokeClock += dt;
+      if (finale && smokeAge < 2.4 && smokeClock > 0.07 && !reduced) {
+        smokeClock = 0;
+        emit(wick.setY(wick.y - 0.12), 1, "smoke");
+      }
+      pops.forEach((pop) => {
+        pop.age += dt;
+        const u = pop.age / 1.3;
+        pop.line.visible = u < 1 && !reduced;
+        if (!pop.line.visible) return;
+        pop.line.scale.setScalar(0.06 + (1 - Math.pow(1 - u, 3)) * 0.3);
+        pop.line.position.y += dt * 0.22;
+        pop.line.material.opacity = Math.sin(Math.PI * Math.min(1, u * 1.6)) * 0.95 * (1 - u * 0.4);
+      });
       heart.rotation.y = THREE.MathUtils.damp(
         heart.rotation.y,
         rotation.kissY || 0,
@@ -322,11 +384,11 @@ export function createMagic({ scene, camera, host, moon, flame }) {
           positions[k] += velocity[k] * dt;
           positions[k + 1] += velocity[k + 1] * dt;
           positions[k + 2] += velocity[k + 2] * dt;
-          velocity[k + 1] -= 0.15 * dt;
+          velocity[k + 1] -= gravity[i] * dt;
         }
-        colors[k] = fade;
-        colors[k + 1] *= 0.97;
-        colors[k + 2] *= 0.97;
+        colors[k] = base[k] * fade;
+        colors[k + 1] = base[k + 1] * fade * fade;
+        colors[k + 2] = base[k + 2] * fade * fade;
         if (reduced || fade === 0) positions[k + 2] = 1000;
       }
       dustGeometry.attributes.position.needsUpdate = true;
@@ -364,6 +426,10 @@ export function createMagic({ scene, camera, host, moon, flame }) {
       texture?.dispose();
       glowTexture.dispose();
       clearMarks();
+      pops.forEach((pop) => {
+        pop.line.geometry.dispose();
+        pop.line.material.dispose();
+      });
       kissMaterial.dispose();
     },
   };

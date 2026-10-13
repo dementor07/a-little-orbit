@@ -96,6 +96,7 @@ textarea:focus-visible {
   gap: 9px;
   font-size: 9px;
   letter-spacing: 2.7px;
+  text-transform: uppercase;
   color: var(--muted);
 }
 .dedication .icon {
@@ -121,9 +122,16 @@ textarea:focus-visible {
   width: 18px;
   height: 18px;
 }
-.edit-button {
+.edit-button,
+.about-button {
   border-color: transparent;
   opacity: 0.65;
+}
+.edit-button {
+  display: none;
+}
+.editing .edit-button {
+  display: inline-grid;
 }
 .world {
   position: relative;
@@ -141,6 +149,7 @@ textarea:focus-visible {
 }
 .opening-caption p,
 .game-caption p,
+.orbit-caption p,
 .wish-caption p,
 .finale > p {
   font-family: "Cormorant Garamond", serif;
@@ -361,6 +370,7 @@ textarea:focus-visible {
   z-index: 2;
 }
 .game-caption,
+.orbit-caption,
 .wish-caption {
   position: absolute;
   left: 0;
@@ -371,6 +381,7 @@ textarea:focus-visible {
   pointer-events: none;
 }
 .game-caption h2,
+.orbit-caption h2,
 .wish-caption h2 {
   font-family: "Cormorant Garamond", serif;
   font-size: clamp(35px, 10vw, 48px);
@@ -1179,4 +1190,132 @@ textarea {
     font-size: 19px;
     bottom: 2%;
   }
+}
+
+/* The little orbit: the Earth and the card's moon. Actions live on the planets themselves. */
+.little-orbit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.experience[data-phase="orbit"] .moon-hit {
+  display: none;
+}
+.orbit-caption h2 {
+  min-height: 1.1em;
+}
+.orbit-moon-hit,
+.orbit-earth-hit {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.orbit-moon-hit {
+  width: min(84%, 340px);
+  aspect-ratio: 1;
+}
+.orbit-earth-hit {
+  width: min(30%, 120px);
+  aspect-ratio: 1;
+}
+.has-webgl .orbit-moon-hit,
+.has-webgl .orbit-earth-hit {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+.has-webgl .orbit-moon-hit:focus-visible,
+.has-webgl .orbit-earth-hit:focus-visible {
+  width: 120px;
+  height: 120px;
+  clip-path: none;
+  outline: 1px solid var(--accent);
+}
+.fallback-orbit {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: min(78%, 330px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.has-webgl .fallback-orbit {
+  display: none;
+}
+.fallback-earth {
+  position: absolute;
+  inset: 33%;
+  border-radius: 50%;
+  background: url("/assets/earth.jpg") 28% center / 200% 100%;
+  box-shadow:
+    inset -14px -8px 22px #0007,
+    0 0 30px #a8cbe244;
+}
+.fallback-path {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+.fallback-moon {
+  position: absolute;
+  width: 15%;
+  aspect-ratio: 1;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: url("/assets/moon.jpg") center / 200% 100%;
+  box-shadow: inset -6px -4px 10px #0007;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fallback-path {
+    animation: fallback-orbit 11s linear infinite;
+  }
+  .drifting .fallback-moon {
+    animation: fallback-drift 1.7s cubic-bezier(0.3, 0.6, 0.3, 1);
+  }
+  .swap {
+    animation: caption-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes fallback-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes fallback-drift {
+    35% {
+      transform: translate(-50%, -210%) scale(0.86);
+    }
+    62% {
+      transform: translate(-50%, -25%);
+    }
+    80% {
+      transform: translate(-50%, -64%);
+    }
+  }
+  @keyframes caption-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+.credits-theme {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
 }

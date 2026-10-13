@@ -15,15 +15,18 @@ import heart from "@phosphor-icons/core/assets/regular/heart.svg";
 import heartFill from "@phosphor-icons/core/assets/fill/heart-fill.svg";
 import star from "@phosphor-icons/core/assets/fill/star-four-fill.svg";
 import close from "@phosphor-icons/core/assets/regular/x.svg";
+import sparkle from "@phosphor-icons/core/assets/regular/sparkle.svg";
 import { createAudio } from "./sound.js";
 import { heartPoint } from "./heart.js";
 
 const defaults = {
   name: "Alka",
-  signature: "All my love, always",
+  signature: "Always yours, in every orbit",
   message:
-    "Somehow, in this very big universe, I got to find you. And of all the things life has surprised me with, you are my favourite.\n\nI hope this next trip around the sun brings you the kind of happiness you give me: the little everyday kind, and the big, can't-stop-smiling kind.\n\nHappy birthday, my love. I'm so lucky to be in your orbit.",
+    "In the whole solar system, the whole galaxy, the whole entire universe, you are my person.\n\nYes, we have our petty squabbles (some of them very, very petty). But however far we drift, we always find our way back to each other and make it work. That\u2019s my favourite thing about us.\n\nHappy birthday, my love. Here\u2019s to another trip around the sun together, squabbles and all.",
 };
+const phases = ["envelope", "letter", "orbit", "stars", "wish", "finale"];
+const steps = { envelope: 0, letter: 1, orbit: 4, stars: 3, wish: 2, finale: 2 };
 function readCard() {
   try {
     const encoded = new URLSearchParams(location.hash.slice(1)).get("card");
@@ -49,6 +52,7 @@ const card = readCard();
 const audio = createAudio();
 let phase = "envelope",
   soundOn = false,
+  soundChosen = false,
   scene,
   opening = false,
   transitionTimer;
@@ -64,10 +68,11 @@ document.querySelector("#app").innerHTML = `
       <div class="controls-right">
         <button class="icon-button sound-button" aria-label="Turn on music" aria-pressed="false">${icon(muted)}</button>
         <button class="icon-button edit-button" aria-label="Personalise your card">${icon(pencil)}</button>
+        <button class="icon-button about-button" aria-label="About this card">${icon(sparkle)}</button>
       </div>
     </header>
     <main class="world" aria-label="Your birthday adventure">
-      <div class="opening-caption"><p>Special delivery</p><h1>For my favourite person.</h1></div>
+      <div class="opening-caption"><p>Special delivery</p><h1>For my person.</h1></div>
       <div class="orbit orbit-one" aria-hidden="true"></div><div class="orbit orbit-two" aria-hidden="true"></div>
       <div id="scene" aria-hidden="true"></div>
       <button class="moon-hit" aria-label="Spin the moon"></button>
@@ -76,26 +81,32 @@ document.querySelector("#app").innerHTML = `
       <button class="envelope-hit" aria-label="Open your birthday envelope"></button>
       <article class="letter" aria-label="A love letter for you" tabindex="-1" hidden>
         <div class="letter-border">${icon(sun, "letter-sun")}
-          <p class="letter-eyebrow">YOU ARE MY FAVOURITE KIND OF MAGIC</p>
+          <p class="letter-eyebrow">YOU, ME &amp; THE WHOLE UNIVERSE</p>
           <h2 class="letter-greeting"></h2><div class="letter-body"></div>
-          <p class="letter-signature"></p><button class="paper-next" aria-label="Put away your letter and catch stars">${icon(heart, "letter-heart")}</button>
+          <p class="letter-signature"></p><button class="paper-next" aria-label="Put away your letter">${icon(heart, "letter-heart")}</button>
         </div>
       </article>
+      <section class="little-orbit" aria-label="The Earth and the moon" hidden>
+        <div class="orbit-caption"><p></p><h2></h2></div>
+        <div class="fallback-orbit" aria-hidden="true"><span class="fallback-earth"></span><span class="fallback-path"><span class="fallback-moon"></span></span></div>
+        <button class="orbit-moon-hit" aria-label="Pull the moon away from the Earth"></button>
+        <button class="orbit-earth-hit" aria-label="Touch the Earth to zoom out"></button>
+      </section>
       <section class="stardust" aria-label="Catch five stars to make a birthday wish" hidden>
-        <div class="game-caption"><p>A little stardust for your wish.</p><h2>Catch the stars.</h2></div>
+        <div class="game-caption"><p></p><h2></h2></div>
         <div class="star-field"><canvas class="constellation" aria-hidden="true"></canvas><button class="heart-control" aria-label="Touch your completed heart to make a wish" hidden></button></div>
         <div class="star-score" role="status" aria-label="0 of 5 stars caught"></div>
       </section>
       <div class="wish-caption" hidden><p>One last thing…</p><h2>Make a wish.</h2></div>
       <button class="flame-hit" aria-label="Blow out your birthday candle" hidden><span class="flame-ring" aria-hidden="true"></span></button>
       <div class="fallback-cake" aria-hidden="true"><span class="fallback-candle"><span class="fallback-fire"></span></span><span class="cake-icing"></span></div>
-      <div class="finale" tabindex="-1" hidden><p>Another trip around the sun.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>A few kisses, from me to you.</span></div>
+      <div class="finale" tabindex="-1" hidden><p>In the whole universe, it’s you.</p><h2>Happy birthday,<br><em class="recipient-name"></em></h2><span>A few kisses, from me to you.</span></div>
       <p class="kiss-whisper" role="status" aria-live="polite" hidden></p>
       <div class="burst-layer" aria-hidden="true"></div>
     </main>
     <footer class="interaction-bar">
       <p class="hint" aria-live="polite">Drag the envelope. Tap it to open.</p>
-      <div class="journey" aria-label="Adventure progress"><span class="active"></span><span></span><span></span><span></span></div>
+      <div class="journey" aria-label="Adventure progress"><span class="active"></span><span></span><span></span><span></span><span></span><span></span></div>
     </footer>
   </div>
   <dialog id="editor" class="dialog">
@@ -111,9 +122,10 @@ document.querySelector("#app").innerHTML = `
   </dialog>
   <dialog id="credits" class="dialog credits-dialog">
     <button class="dialog-close icon-button" aria-label="Close credits">${icon(close)}</button><h2>A tiny universe.</h2>
-    <p>Moon texture: <a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noreferrer">NASA’s Scientific Visualization Studio</a>, from Lunar Reconnaissance Orbiter data.</p>
+    <p>Earth: <a href="https://visibleearth.nasa.gov/images/73909/december-blue-marble-next-generation-w-topography-and-bathymetry" target="_blank" rel="noreferrer">Blue Marble Next Generation</a> and <a href="https://visibleearth.nasa.gov/images/57747/blue-marble-clouds" target="_blank" rel="noreferrer">Blue Marble clouds</a>, NASA Earth Observatory (Reto Stöckli). Moon: <a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noreferrer">CGI Moon Kit</a>, NASA’s Scientific Visualization Studio, from Lunar Reconnaissance Orbiter data.</p>
     <p>Fonts: <a href="https://github.com/CatharsisFonts/Cormorant" target="_blank" rel="noreferrer">Cormorant Garamond</a> and <a href="https://github.com/sharanda/manrope" target="_blank" rel="noreferrer">Manrope</a>. Icons: <a href="https://phosphoricons.com" target="_blank" rel="noreferrer">Phosphor</a>.</p>
-    <p>Built with Three.js. Paper, stars, cake, and original music created in your browser.</p>
+    <p>Built with Three.js. Paper, stars, galaxies, cake, and original music created in your browser.</p>
+    <button class="theme-button credits-theme">${icon(moon)} Change colours</button>
   </dialog>
 `;
 const experience = document.querySelector(".experience");
@@ -133,10 +145,72 @@ let kisses = 0,
   letterTapStart;
 const kissWords = [
   "A kiss, from me to you.",
-  "One for your smile.",
-  "One just because I love you.",
+  "One for every time we made up.",
+  "One for the next squabble. In advance.",
+  "One just because you’re my person.",
   "And one more. Always.",
 ];
+const orbitSection = document.querySelector(".little-orbit");
+const orbitCaption = document.querySelector(".orbit-caption");
+const gameCaption = document.querySelector(".game-caption");
+const pullLines = [
+  ["Sometimes we drift apart", "over the silliest things…"],
+  ["Another petty squabble?", "Watch this…"],
+  ["Go on, pull harder.", "Nope."],
+];
+const reunionLines = [
+  ["But every single time,", "we come back."],
+  ["Every. Single. Time.", "Told you."],
+  ["Still here.", "Still yours."],
+];
+let pulls = 0,
+  reunions = 0,
+  driftTimer;
+function caption(el, [lead, line]) {
+  el.querySelector("p").textContent = lead;
+  el.querySelector("h2").textContent = line;
+  el.classList.remove("swap");
+  void el.offsetWidth;
+  el.classList.add("swap");
+}
+function onPullStart(auto = false) {
+  if (phase !== "orbit") return;
+  caption(orbitCaption, pullLines[Math.min(pulls++, pullLines.length - 1)]);
+  if (!auto) hint.textContent = "Now let go.";
+  if (soundOn) audio.drift();
+}
+function onReunion() {
+  if (phase !== "orbit") return;
+  caption(orbitCaption, reunionLines[Math.min(reunions++, reunionLines.length - 1)]);
+  experience.dataset.reunions = String(reunions);
+  if (soundOn) audio.reunion();
+  hint.textContent = "Pull again, or touch the Earth to zoom out.";
+}
+// Without WebGL (or from the keyboard), the moon drifts off and swings back by itself.
+function drift() {
+  if (phase !== "orbit") return;
+  if (scene) {
+    scene.driftMoon();
+    return;
+  }
+  if (orbitSection.classList.contains("drifting")) return;
+  onPullStart(true);
+  orbitSection.classList.add("drifting");
+  driftTimer = setTimeout(
+    () => {
+      orbitSection.classList.remove("drifting");
+      onReunion();
+    },
+    reduce.matches ? 0 : 1700,
+  );
+}
+function onEarthTap() {
+  if (phase !== "orbit") return;
+  if (reunions) setPhase("stars");
+  else drift();
+}
+document.querySelector(".orbit-moon-hit").addEventListener("click", drift);
+document.querySelector(".orbit-earth-hit").addEventListener("click", onEarthTap);
 function receiveKiss(point) {
   if (phase !== "finale") return;
   scene?.sendKiss(point);
@@ -169,9 +243,8 @@ document.querySelector(".moon-hit").addEventListener("click", () => {
   if (phase === "finale") setPhase("envelope");
   else scene?.spinMoon();
 });
-let theme = matchMedia("(prefers-color-scheme: dark)").matches
-  ? "night"
-  : "day";
+// Night is the card's own sky; the daylight palette stays one tap away in the credits.
+let theme = "night";
 try {
   theme = localStorage.getItem("orbit-theme") || theme;
 } catch {}
@@ -193,9 +266,11 @@ function fillCopy() {
   document.title = `For ${card.name}, with love · A little orbit`;
 }
 function setPhase(next) {
-  if (phase === "letter" && next === "stars" && soundOn) audio.paper();
+  if (phase === "letter" && next === "orbit" && soundOn) audio.paper();
   clearTimeout(kissTimer);
   clearTimeout(kissReveal);
+  clearTimeout(driftTimer);
+  orbitSection.classList.remove("drifting");
   kissWhisper.hidden = true;
   stopHold();
   phase = next;
@@ -208,6 +283,7 @@ function setPhase(next) {
     );
   experience.dataset.phase = phase;
   letter.hidden = phase !== "letter";
+  orbitSection.hidden = phase !== "orbit";
   document.querySelector(".stardust").hidden = phase !== "stars";
   document.querySelector(".wish-caption").hidden = phase !== "wish";
   document.querySelector(".finale").hidden = phase !== "finale";
@@ -215,6 +291,9 @@ function setPhase(next) {
   hint.textContent = {
     envelope: "Drag the envelope. Tap it to open.",
     letter: "Double-tap the paper for a kiss. Swipe up to continue.",
+    orbit: scene
+      ? "Pull the moon away from the Earth."
+      : "Tap the moon.",
     stars: "Tap the five golden stars.",
     wish: "Turn the cake. Hold the flame to make a wish.",
     finale: "Touch the heart for a kiss. The moon starts it again.",
@@ -224,12 +303,15 @@ function setPhase(next) {
     .forEach((dot, i) =>
       dot.classList.toggle(
         "active",
-        i <= ["envelope", "letter", "stars", "wish", "finale"].indexOf(phase),
+        i <= phases.indexOf(phase),
       ),
     );
-  scene?.setStep(
-    { envelope: 0, letter: 1, stars: 3, wish: 2, finale: 2 }[phase],
-  );
+  scene?.setStep(steps[phase]);
+  if (phase === "orbit") {
+    pulls = reunions = 0;
+    experience.dataset.reunions = "0";
+    caption(orbitCaption, ["In the whole solar system,", "you’re my world."]);
+  }
   if (phase === "letter") {
     letter.style.removeProperty("animation");
     requestAnimationFrame(() => {
@@ -255,6 +337,8 @@ function setPhase(next) {
 function openEnvelope() {
   if (phase !== "envelope" || opening) return;
   opening = true;
+  // Opening the envelope is a deliberate tap, so the music box can start with it.
+  if (!soundOn && !soundChosen) toggleSound();
   experience.classList.add("opening");
   scene?.setStep(1);
   if (soundOn) audio.chime();
@@ -272,7 +356,7 @@ function openEnvelope() {
 document.querySelector(".envelope-hit").addEventListener("click", openEnvelope);
 document
   .querySelector(".paper-next")
-  .addEventListener("click", () => setPhase("stars"));
+  .addEventListener("click", () => setPhase("orbit"));
 let letterDrag = null;
 letter.addEventListener("pointerdown", (event) => {
   if (
@@ -297,7 +381,7 @@ function releaseLetter(cancel = false) {
   letterDrag = null;
   letter.style.removeProperty("transform");
   letter.style.removeProperty("opacity");
-  if (leave) setPhase("stars");
+  if (leave) setPhase("orbit");
 }
 letter.addEventListener("pointerup", () => releaseLetter());
 letter.addEventListener("pointercancel", () => releaseLetter(true));
@@ -408,8 +492,7 @@ function collectStar(i) {
   updateScore();
   drawConstellation();
   if (caught.size === 5) {
-    document.querySelector(".game-caption h2").textContent =
-      "You’re my universe.";
+    caption(gameCaption, ["Of every star in the galaxy,", "you’re my person."]);
     hint.textContent = "Tap the heart to make your wish.";
     heartControl.hidden = false;
   }
@@ -418,7 +501,8 @@ function resetStars() {
   heartControl.hidden = true;
   caught.clear();
   field.querySelectorAll(".catch-star").forEach((el) => el.remove());
-  document.querySelector(".game-caption h2").textContent = "Catch the stars.";
+  gameCaption.querySelector("p").textContent = "A little stardust for your wish.";
+  gameCaption.querySelector("h2").textContent = "Catch the stars.";
   starPositions.forEach(([x, y], i) => {
     const button = document.createElement("button");
     button.className = "catch-star";
@@ -495,14 +579,16 @@ function setTheme() {
   if (phase === "stars") drawConstellation();
 }
 setTheme();
-document.querySelector(".theme-button").addEventListener("click", () => {
-  theme = theme === "night" ? "day" : "night";
-  setTheme();
-  try {
-    localStorage.setItem("orbit-theme", theme);
-  } catch {}
-});
-document.querySelector(".sound-button").addEventListener("click", async () => {
+document.querySelectorAll(".theme-button").forEach((button) =>
+  button.addEventListener("click", () => {
+    theme = theme === "night" ? "day" : "night";
+    setTheme();
+    try {
+      localStorage.setItem("orbit-theme", theme);
+    } catch {}
+  }),
+);
+async function toggleSound() {
   try {
     soundOn = await audio.toggle();
   } catch {
@@ -512,7 +598,22 @@ document.querySelector(".sound-button").addEventListener("click", async () => {
   b.setAttribute("aria-pressed", String(soundOn));
   b.setAttribute("aria-label", soundOn ? "Turn off music" : "Turn on music");
   b.querySelector("img").src = soundOn ? speaker : muted;
+}
+document.querySelector(".sound-button").addEventListener("click", () => {
+  soundChosen = true;
+  toggleSound();
 });
+// The pencil is for the sender: open the card with #edit to personalise it.
+function syncEditing() {
+  document.documentElement.classList.toggle(
+    "editing",
+    new URLSearchParams(location.hash.slice(1)).has("edit"),
+  );
+}
+syncEditing();
+document
+  .querySelector(".about-button")
+  .addEventListener("click", () => document.querySelector("#credits").showModal());
 document.querySelector(".edit-button").addEventListener("click", () => {
   for (const k of ["name", "message", "signature"])
     form.elements[k].value = card[k];
@@ -580,6 +681,7 @@ for (let i = 0; i < 70; i++) {
 }
 fillCopy();
 window.addEventListener("hashchange", () => {
+  syncEditing();
   Object.assign(card, readCard());
   fillCopy();
   scene?.updateName(card.name);
@@ -617,6 +719,12 @@ import("./scene.js")
           lastKissX = px;
           lastKissY = py;
         }
+      },
+      onPullStart,
+      onReunion,
+      onEarthTap,
+      onPullEnd() {
+        if (phase === "orbit" && hint.textContent === "Now let go.") hint.textContent = "";
       },
       onWishStart: startHold,
       onWishEnd: releaseWish,
@@ -657,9 +765,7 @@ import("./scene.js")
     });
     if (scene) {
       document.documentElement.classList.add("has-webgl");
-      scene.setStep(
-        { envelope: 0, letter: 1, stars: 3, wish: 2, finale: 2 }[phase],
-      );
+      scene.setStep(steps[phase]);
       scene.setTheme(theme);
       if (phase === "stars")
         caught.forEach((index) => scene.collectStar(index));
@@ -684,6 +790,7 @@ window.addEventListener("pagehide", (event) => {
   clearTimeout(transitionTimer);
   clearTimeout(kissTimer);
   clearTimeout(kissReveal);
+  clearTimeout(driftTimer);
   stopHold();
   scene?.dispose();
   audio.dispose();
