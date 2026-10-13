@@ -1296,8 +1296,31 @@ textarea {
   .drifting .fallback-moon {
     animation: fallback-drift 1.7s cubic-bezier(0.3, 0.6, 0.3, 1);
   }
-  .swap {
-    animation: caption-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Captions settle in line by line, from soft focus to sharp. */
+  .swap p,
+  .swap h2 {
+    animation: caption-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .swap h2 {
+    animation-delay: 0.12s;
+  }
+  .game-caption:not(.swap) p,
+  .game-caption:not(.swap) h2,
+  .wish-caption p,
+  .wish-caption h2,
+  .opening-caption p,
+  .opening-caption h1,
+  .finale > * {
+    animation: caption-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .game-caption h2,
+  .wish-caption h2,
+  .opening-caption h1,
+  .finale h2 {
+    animation-delay: 0.14s;
+  }
+  .finale > span {
+    animation-delay: 0.32s;
   }
   @keyframes fallback-orbit {
     to {
@@ -1318,7 +1341,8 @@ textarea {
   @keyframes caption-in {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      filter: blur(6px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;

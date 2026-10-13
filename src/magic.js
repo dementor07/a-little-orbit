@@ -101,6 +101,21 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 64, 64);
   const glowTexture = new THREE.CanvasTexture(canvas);
+  // Stardust: a bright core with four fine rays, like a real point of light.
+  const sparkleCanvas = document.createElement("canvas");
+  sparkleCanvas.width = sparkleCanvas.height = 64;
+  const sparkleContext = sparkleCanvas.getContext("2d");
+  sparkleContext.drawImage(canvas, 16, 16, 32, 32);
+  sparkleContext.globalCompositeOperation = "lighter";
+  for (const [w, h] of [[64, 3], [3, 64]]) {
+    const ray = sparkleContext.createLinearGradient(w > h ? 0 : 32, w > h ? 32 : 0, w > h ? 64 : 32, w > h ? 32 : 64);
+    ray.addColorStop(0, "rgba(255,255,255,0)");
+    ray.addColorStop(0.5, "rgba(255,255,255,0.85)");
+    ray.addColorStop(1, "rgba(255,255,255,0)");
+    sparkleContext.fillStyle = ray;
+    sparkleContext.fillRect(32 - w / 2, 32 - h / 2, w, h);
+  }
+  const sparkleTexture = new THREE.CanvasTexture(sparkleCanvas);
   const glow = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: glowTexture,
@@ -132,9 +147,9 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
   const dust = new THREE.Points(
     dustGeometry,
     new THREE.PointsMaterial({
-      map: glowTexture,
+      map: sparkleTexture,
       vertexColors: true,
-      size: 0.1,
+      size: 0.16,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -427,6 +442,7 @@ export function createMagic({ scene, renderer, camera, view, moon, flame }) {
       alive = false;
       texture?.dispose();
       glowTexture.dispose();
+      sparkleTexture.dispose();
       clearMarks();
       pops.forEach((pop) => {
         pop.line.geometry.dispose();

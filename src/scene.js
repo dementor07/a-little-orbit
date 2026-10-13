@@ -3,6 +3,8 @@ import { attachInteractions } from "./interactions.js";
 import { createMagic } from "./magic.js";
 import { createOrbit } from "./orbit.js";
 import { createCosmos } from "./galaxy.js";
+import { createBackdrop } from "./backdrop.js";
+import { decorateCake } from "./cake.js";
 
 export function createScene(host, options) {
   let renderer;
@@ -483,23 +485,49 @@ export function createScene(host, options) {
     berry.position.set(Math.cos(a) * 0.98, 0.35, Math.sin(a) * 0.98);
     cake.add(berry);
   }
+  const cakeDetails = decorateCake(cake, { flame });
+  // Paper confetti with real flight: it bursts up, slows in the air, then tumbles and
+  // flutters down. Metallic pieces catch the key light as they turn.
   const confetti = new THREE.Group();
   scene.add(confetti);
-  const confettiMaterials = ["#e9d28a", "#8caebb", "#d69a98", "#e9ecdd"].map(
-    (color) => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
-  );
-  const confettiGeo = new THREE.PlaneGeometry(0.065, 0.13);
-  for (let i = 0; i < 95; i++) {
-    const p = new THREE.Mesh(confettiGeo, confettiMaterials[i % 4]);
+  const confettiMaterials = [
+    { color: "#e3c56f", metalness: 0.8, roughness: 0.28 },
+    { color: "#f2ede0", metalness: 0, roughness: 0.6 },
+    { color: "#d99a98", metalness: 0.35, roughness: 0.4 },
+    { color: "#9db7c6", metalness: 0.2, roughness: 0.5 },
+    { color: "#c9a24f", metalness: 0.85, roughness: 0.22 },
+  ].map((m) => new THREE.MeshStandardMaterial({ ...m, side: THREE.DoubleSide }));
+  const confettiShapes = [
+    new THREE.PlaneGeometry(0.07, 0.14),
+    new THREE.PlaneGeometry(0.1, 0.1),
+    new THREE.CircleGeometry(0.055, 12),
+  ];
+  for (let i = 0; i < 150; i++) {
+    const p = new THREE.Mesh(confettiShapes[i % 3], confettiMaterials[i % 5]);
     p.userData = {
-      angle: i * 2.399,
-      speed: 0.7 + (i % 7) * 0.17,
-      lift: 2 + (i % 9) * 0.16,
-      spin: i * 0.6,
+      velocity: new THREE.Vector3(),
+      axis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
+      spin: 4 + Math.random() * 9,
+      sway: 0.6 + Math.random() * 1.4,
+      phase: Math.random() * Math.PI * 2,
+      delay: Math.random() * 0.25,
     };
     p.visible = false;
     confetti.add(p);
   }
+  const launch = () => {
+    confetti.children.forEach((p) => {
+      const d = p.userData,
+        a = Math.random() * Math.PI * 2,
+        lift = 4.2 + Math.random() * 3.4,
+        spread = 1 + Math.random() * 2.8;
+      flame.getWorldPosition(p.position);
+      p.position.y += 0.1;
+      d.velocity.set(Math.cos(a) * spread, lift, Math.sin(a) * spread * 0.6 + 0.8);
+      p.quaternion.setFromAxisAngle(d.axis, Math.random() * 6);
+    });
+  };
+  const backdrop = createBackdrop(scene, renderer.getPixelRatio());
   const magic = createMagic({ scene, renderer, camera, view, moon: lunarMoon, flame });
   const orbit = createOrbit({
     scene,
@@ -586,7 +614,7 @@ export function createScene(host, options) {
       open = currentStep === 1 ? 1 : 0;
       cakeMix = currentStep === 2 ? 1 : 0;
     }
-    envelope.visible = currentStep !== 3 && currentStep !== 4 && cakeMix < 0.98;
+    envelope.visible = currentStep <= 1 && cakeMix < 0.98;
     envelope.scale.setScalar(Math.max(0.001, 1 - cakeMix));
     envelope.rotation.y = THREE.MathUtils.damp(
       envelope.rotation.y,
@@ -636,17 +664,28 @@ export function createScene(host, options) {
     if (celebration >= 0) {
       celebration += dt;
       confetti.children.forEach((p) => {
-        p.visible = !reduced && celebration < 5.5;
         const d = p.userData,
-          v = celebration;
-        p.position.set(
-          Math.cos(d.angle) * v * d.speed,
-          d.lift * v - 0.55 * v * v,
-          Math.sin(d.angle) * v * d.speed * 0.5 + 1,
-        );
-        p.rotation.set(d.spin + v * 2, v * 1.6, v);
+          live = celebration - d.delay;
+        p.visible = !reduced && live > 0 && celebration < 7;
+        if (!p.visible) return;
+        // Gravity, strong air drag and a sideways flutter give paper its float.
+        d.velocity.y -= 5.2 * dt;
+        d.velocity.multiplyScalar(Math.exp(-2.1 * dt));
+        const flutter = Math.sin(t * d.sway * 3 + d.phase);
+        p.position.addScaledVector(d.velocity, dt);
+        p.position.x += flutter * 0.55 * dt;
+        p.rotateOnAxis(d.axis, d.spin * dt * (0.6 + Math.abs(flutter) * 0.6));
+        p.scale.setScalar(Math.min(1, (7 - celebration) / 1.2));
       });
     }
+    // A slow, barely-there camera drift: near things move more than the far universe.
+    if (!reduced) {
+      camera.position.x = Math.sin(t * 0.11) * 0.16;
+      camera.position.y = 0.3 + Math.sin(t * 0.083 + 1.3) * 0.1;
+      camera.lookAt(0, 0, 0);
+    }
+    cakeDetails.update(t, wishProgress, flame.visible && cake.visible, reduced);
+    backdrop.update(dt, t, reduced);
     interactions.update(dt, t, reduced);
     orbit.update(dt, t, reduced);
     moonTouch.scale.setScalar(currentStep === 4 ? 1.8 : 1);
@@ -725,6 +764,7 @@ export function createScene(host, options) {
       magic.shoot(flame.getWorldPosition(new THREE.Vector3()));
       interactions.celebrate();
       celebration = 0;
+      launch();
       flame.visible = false;
       flameInner.visible = false;
       candleLight.visible = false;
@@ -738,6 +778,7 @@ export function createScene(host, options) {
       interactions.setTheme(theme);
       orbit.setTheme(theme);
       cosmos.setTheme(theme);
+      backdrop.setTheme(theme);
     },
     setReducedMotion(value) {
       reduced = value;
@@ -757,6 +798,8 @@ export function createScene(host, options) {
       magic.dispose();
       orbit.dispose();
       cosmos.dispose();
+      backdrop.dispose();
+      cakeDetails.dispose();
       const geometries = new Set(),
         materials = new Set();
       scene.traverse((o) => {
